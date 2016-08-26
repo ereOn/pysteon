@@ -21,6 +21,7 @@ pysteon is a library and a set of CLI that controls Insteon devices.
     install_requires=[
         'chromalog>=1.0.5,<2',
         'click>=6.6,<7',
+        'pyserial>=3.1.1,<4',
     ],
     test_suite='tests',
     classifiers=[
