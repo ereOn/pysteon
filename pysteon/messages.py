@@ -35,6 +35,12 @@ MESSAGE_SIZE = 7
 EXTENDED_MESSAGE_SIZE = 21
 
 
+class IMButtonEvent(IntEnum):
+    set_button_tapped = 0x02
+    set_button_hold = 0x03
+    set_button_released = 0x04
+
+
 def has_bit(value, bit):
     return (value & (1 << (7 - bit))) != 0
 
@@ -279,3 +285,19 @@ class ExtendedMessageResponse(Response):
             hexlify(self.command_data).decode(),
             hexlify(self.user_data).decode(),
         )
+
+
+class ButtonEventReportResponse(Response):
+    command = b'\x54'
+
+    @classmethod
+    async def read_payload(cls, read):
+        response = await read(1)
+
+        return cls(event=IMButtonEvent(response[0]))
+
+    def __init__(self, event):
+        self.event = event
+
+    def __str__(self):
+        return "Insteon Modem button event report: %s" % self.event.name
