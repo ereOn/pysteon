@@ -25,6 +25,8 @@ from .messages import (
     GetNextAllLinkRecordRequest,
     GetNextAllLinkRecordResponse,
     Response,
+    StartAllLinkingRequest,
+    StartAllLinkingResponse,
 )
 from .log import logger
 
@@ -186,3 +188,12 @@ class Controller(object):
             pass
 
         return records
+
+    async def start_all_linking_session(self, all_link_code, all_link_group):
+        await self.send_request(
+            StartAllLinkingRequest(
+                all_link_code=all_link_code,
+                all_link_group=all_link_group,
+            ),
+        )
+        return await self.recv_response(expected_class=StartAllLinkingResponse)

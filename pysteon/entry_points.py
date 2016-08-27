@@ -12,6 +12,7 @@ from chromalog.mark.helpers.simple import important
 
 from .controller import Controller
 from .log import logger
+from .messages import AllLinkCode
 
 
 def setup_logging(debug):
@@ -62,6 +63,15 @@ def pysteon(debug, serial_port_url):
 
     for _ in range(25):
         print(loop.run_until_complete(controller.recv_response()))
+
+    print(
+        loop.run_until_complete(
+            controller.start_all_linking_session(
+                all_link_code=AllLinkCode.responder,
+                all_link_group=b'\x00',
+            ),
+        ),
+    )
 
     logger.info(
         "Pysteon closing...",

@@ -41,6 +41,13 @@ class IMButtonEvent(IntEnum):
     set_button_released = 0x04
 
 
+class AllLinkCode(IntEnum):
+    responder = 0x00
+    controller = 0x01
+    auto = 0x03
+    delete = 0xff
+
+
 def has_bit(value, bit):
     return (value & (1 << (7 - bit))) != 0
 
@@ -301,3 +308,49 @@ class ButtonEventReportResponse(Response):
 
     def __str__(self):
         return "Insteon Modem button event report: %s" % self.event.name
+
+
+class StartAllLinkingRequest(Request):
+    command = b'\x64'
+
+    def __init__(self, all_link_code, all_link_group):
+        """
+        Start an all-linking session.
+
+        :param all_link_code: The link code enumeration value.
+        :param all_link_group: The all-link group, as bytes.
+        """
+        self.all_link_code = all_link_code
+        self.all_link_group = all_link_group
+
+    async def write(self, write):
+        await super().write(write)
+        await write(self.all_link_code.value.to_bytes(1, 'big'))
+        await write(self.all_link_group)
+
+
+class StartAllLinkingResponse(Response):
+    command = b'\x64'
+
+    @classmethod
+    async def read_payload(cls, read):
+        response = await read(2)
+        await cls.read_ack_or_nak(read)
+
+        return cls(
+            all_link_code=AllLinkCode(response[0]),
+            all_link_group=response[1:],
+        )
+
+    def __init__(self, all_link_code, all_link_group):
+        self.all_link_code = all_link_code
+        self.all_link_group = all_link_group
+
+    def __str__(self):
+        return (
+            "Insteon Modem all-linking session for group %s started in "
+            "mode: %s"
+        ) % (
+            hexlify(self.all_link_group).decode(),
+            self.all_link_code.name,
+        )
