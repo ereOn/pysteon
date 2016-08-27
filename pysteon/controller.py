@@ -5,6 +5,7 @@ A controller.
 import asyncio
 
 from binascii import hexlify
+from collections import defaultdict
 from io import (
     SEEK_END,
     SEEK_SET,
@@ -60,7 +61,8 @@ class Controller(object):
         )
         self.flush()
         self.serial_lock = asyncio.Lock()
-        self.read_buffer = bytearray()
+        self._read_buffer = bytearray()
+        self._messages = defaultdict(list)
 
     def flush(self):
         self.serial.flushInput()
@@ -79,7 +81,7 @@ class Controller(object):
         :returns: The bytes read.
         """
         async with self.serial_lock:
-            while len(self.read_buffer) < cnt:
+            while len(self._read_buffer) < cnt:
                 data = await self.loop.run_in_executor(
                     None,
                     self.serial.read,
@@ -87,7 +89,10 @@ class Controller(object):
                 )
 
                 if not data:
-                    raise ReadTimeout(expected_size=cnt, data=self.read_buffer)
+                    raise ReadTimeout(
+                        expected_size=cnt,
+                        data=self._read_buffer,
+                    )
 
                 logger.debug(
                     "Read: %s (%s byte(s))",
@@ -95,10 +100,10 @@ class Controller(object):
                     len(data),
                 )
 
-                self.read_buffer.extend(data)
+                self._read_buffer.extend(data)
 
-            result = self.read_buffer[:cnt]
-            self.read_buffer[:] = self.read_buffer[cnt:]
+            result = self._read_buffer[:cnt]
+            self._read_buffer[:] = self._read_buffer[cnt:]
 
             return result
 
@@ -166,57 +171,64 @@ class Controller(object):
 
         return response
 
-    async def read_message(self, command, expected_size):
+    async def read_message(self, command=None):
         """
         Wait for a message to arrive.
 
-        :param command: The expected command message.
-        :param expected_size: The expected size of the message.
+        :param command: The expected command to receive. If not specified, the
+            first received command will be returned.
         """
-        logger.debug(
-            "Waiting for message: %s. Expecting %s byte(s) back.",
-            hexlify(command).decode(),
-            expected_size,
-        )
-
-        prefix_byte = await self.read(1)
-
-        if not prefix_byte == self.PREFIX_BYTE:
-            raise SynchronizationError(
-                "Expected a prefix byte but got %s instead" % \
-                hexlify(prefix_byte).decode(),
+        if command:
+            logger.debug(
+                "Waiting for a message of type: %s.",
+                hexlify(command).decode(),
             )
 
-        command_byte = await self.read(1)
+            if self._messages.get(command):
+                return self._messages[command].pop(0)
+        else:
+            logger.debug("Waiting for any message.")
 
-        if not command_byte == command:
-            raise SynchronizationError(
-                "Expected a command byte but got %s instead" % \
+        response = None
+
+        while not response:
+            prefix_byte = await self.read(1)
+
+            if not prefix_byte == self.PREFIX_BYTE:
+                raise SynchronizationError(
+                    "Expected a prefix byte but got %s instead" % \
+                    hexlify(prefix_byte).decode(),
+                )
+
+            command_byte = await self.read(1)
+            flags_byte = (await self.read(1))[0]
+            max_hops = flags_byte & 0x03
+            hops_left = (flags_byte & 0x0c) >> 2
+
+            flags = dict(
+                extended=get_bit(flags_byte, 4),
+                ack=get_bit(flags_byte, 5),
+                all_link=get_bit(flags_byte, 6),
+                broadcast=get_bit(flags_byte, 7),
+            )
+            expected_size = 21 if flags['extended'] else 7
+
+            response = await self.read(expected_size)
+
+            logger.debug(
+                "Received message of type %s: %s. Info: %d/%d hops. Flags: %s",
                 hexlify(command_byte).decode(),
+                hexlify(response).decode(),
+                hops_left,
+                max_hops,
+                ', '.join(
+                    flag for flag, is_set in flags.items() if is_set
+                ),
             )
 
-        flags_byte = (await self.read(1))[0]
-        max_hops = flags_byte & 0x03
-        hops_left = (flags_byte & 0x0c) >> 2
-
-        flags = dict(
-            extended=get_bit(flags_byte, 4),
-            ack=get_bit(flags_byte, 5),
-            all_link=get_bit(flags_byte, 6),
-            broadcast=get_bit(flags_byte, 7),
-        )
-
-        response = await self.read(expected_size)
-
-        logger.debug(
-            "Received response: %s. Info: %d/%d hops. Flags: %s",
-            hexlify(response).decode(),
-            hops_left,
-            max_hops,
-            ', '.join(
-                flag for flag, is_set in flags.items() if is_set
-            ),
-        )
+            if command is not None and command_byte != command:
+                self._messages[command_byte].append(response)
+                response = None
 
         return response
 
@@ -242,7 +254,6 @@ class Controller(object):
             while True:
                 response = await self.read_message(
                     command=self.ALL_LINK_RECORD_RESPONSE,
-                    expected_size=7,
                 )
                 records.append(AllLinkRecord(
                     group=response[0],
