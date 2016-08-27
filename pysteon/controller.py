@@ -3,10 +3,9 @@ A controller.
 """
 
 import asyncio
-import os
 
+from binascii import hexlify
 from io import (
-    BytesIO,
     SEEK_END,
     SEEK_SET,
 )
@@ -18,14 +17,27 @@ from serial import (
 )
 from serial.aio import create_serial_connection
 
+from .exceptions import (
+    AcknowledgmentFailure,
+    ReadTimeout,
+    SynchronizationError,
+)
+from .log import logger
+from .objects import (
+    Identity,
+    IMInfo,
+)
+
 
 class Controller(object):
-    def __init__(self, *, serial_port_url=None, loop=None):
-        # TODO: Move this higher in the chain. That's too much logic for here.
-        self.serial_port_url = serial_port_url or os.environ.get(
-            'PYSTEON_SERIAL_PORT_URL',
-            '/dev/ttyUSB0',
-        )
+    PREFIX_BYTE = b'\x02'
+    ACK_BYTE = b'\x06'
+    NAK_BYTE = b'\x15'
+
+    def __init__(self, *, serial_port_url, read_timeout=0.5, loop=None):
+        assert serial_port_url
+
+        self.serial_port_url = serial_port_url
         self.loop = loop or asyncio.get_event_loop()
         self.serial = serial_for_url(
             self.serial_port_url,
@@ -33,13 +45,15 @@ class Controller(object):
             parity=PARITY_NONE,
             stopbits=STOPBITS_ONE,
             bytesize=EIGHTBITS,
-            timeout=1,
+            timeout=read_timeout,
         )
+        self.flush()
+        self.serial_lock = asyncio.Lock()
+        self.read_buffer = bytearray()
+
+    def flush(self):
         self.serial.flushInput()
         self.serial.flushOutput()
-        self.serial_lock = asyncio.Lock()
-        self.read_buffer = BytesIO()
-
 
     def close(self):
         if self.serial:
@@ -54,32 +68,103 @@ class Controller(object):
         :returns: The bytes read.
         """
         async with self.serial_lock:
-            while self.read_buffer.getbuffer().nbytes < cnt:
-                data = await self.loop.run_in_executor(None, self.serial.read, cnt)
+            while len(self.read_buffer) < cnt:
+                data = await self.loop.run_in_executor(
+                    None,
+                    self.serial.read,
+                    cnt,
+                )
 
-                self.read_buffer.seek(0, SEEK_END)
-                self.read_buffer.write(data)
+                if not data:
+                    raise ReadTimeout(expected_size=cnt, data=self.read_buffer)
 
-            self.read_buffer.seek(0, SEEK_SET)
-            return self.read_buffer.read(cnt)
+                logger.debug(
+                    "Read: %s (%s byte(s))",
+                    hexlify(data).decode(),
+                    len(data),
+                )
 
-    async def write(self, data, flush=True):
+                self.read_buffer.extend(data)
+
+            result = self.read_buffer[:cnt]
+            self.read_buffer[:] = self.read_buffer[cnt:]
+
+            return result
+
+    async def write(self, data):
         """
         Write data on the controller.
 
         :param data: The data to write.
         """
         async with self.serial_lock:
+            logger.debug(
+                "Sent: %s (%s byte(s))",
+                hexlify(data).decode(),
+                len(data),
+            )
             self.serial.write(data)
 
-            if flush:
-                self.serial.flush()
+    async def communicate(self, command, params, expected_size):
+        """
+        Send a command and wait for a response of the specified size or fail.
+
+        :param command: The command to send, without any prefix.
+        :param expected_size: The expected size of the response, without its
+            prefix or suffix.
+        :returns: The response, without any prefix or suffix.
+        """
+        logger.debug(
+            "Sending command: %s (%s). Expecting %s byte(s) back.",
+            hexlify(command).decode(),
+            hexlify(params).decode(),
+            expected_size,
+        )
+        await self.write(self.PREFIX_BYTE)
+        await self.write(command)
+
+        prefix_byte = await self.read(1)
+
+        if not prefix_byte == self.PREFIX_BYTE:
+            raise SynchronizationError(
+                "Expected a prefix byte but got %s instead" % \
+                hexlify(prefix_byte).decode(),
+            )
+
+        command_byte = await self.read(1)
+
+        if command_byte == self.NAK_BYTE:
+            raise AcknowledgmentFailure(command=command)
+        elif not command_byte == command:
+            raise SynchronizationError(
+                "Expected a command byte but got %s instead" % \
+                hexlify(command_byte).decode(),
+            )
+
+        response = await self.read(expected_size)
+
+        ack_byte = await self.read(1)
+
+        if not ack_byte == self.ACK_BYTE:
+            raise SynchronizationError(
+                "Expected an ACK byte but got %s instead" % \
+                hexlify(ack_byte).decode(),
+            )
+
+        logger.debug("Received response: %s.", hexlify(response).decode())
+
+        return response
 
     async def get_im_info(self):
-        await self.write(b'\x02\x60')
-        result = await self.read(9)
-        # TODO: Make this better. I assume responses can be out of order.
-        assert result[0] == 0x02
-        assert result[1] == 0x60
-        identifier = '%02x.%02x.%02x' % tuple(result[2:5])
-        return identifier
+        response = await self.communicate(
+            command=b'\x60',
+            params=b'',
+            expected_size=6,
+        )
+
+        return IMInfo(
+            identity=Identity(response[:3]),
+            device_category=response[3],
+            device_subcategory=response[4],
+            firmware_version=response[5],
+        )
