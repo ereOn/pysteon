@@ -2,6 +2,8 @@
 Objects classes.
 """
 
+from binascii import hexlify
+
 
 class Identity(object):
     def __init__(self, value):
@@ -33,4 +35,18 @@ class IMInfo(object):
             self.device_category,
             self.device_subcategory,
             self.firmware_version,
+        )
+
+
+class AllLinkRecord(object):
+    def __init__(self, group, identity, data):
+        self.group = group
+        self.identity = identity
+        self.data = data
+
+    def __str__(self):
+        return "%s - %02x (%s)" % (
+            self.identity,
+            self.group,
+            hexlify(self.data).decode(),
         )

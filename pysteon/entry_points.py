@@ -55,6 +55,10 @@ def pysteon(debug, serial_port_url):
         "Pysteon started. Connected to: %s",
         important(im_info),
     )
+    records = loop.run_until_complete(controller.get_all_link_records())
+
+    for record in records:
+        print(record)
 
     logger.info(
         "Pysteon closing...",

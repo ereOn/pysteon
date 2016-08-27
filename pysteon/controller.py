@@ -24,6 +24,7 @@ from .exceptions import (
 )
 from .log import logger
 from .objects import (
+    AllLinkRecord,
     Identity,
     IMInfo,
 )
@@ -33,6 +34,12 @@ class Controller(object):
     PREFIX_BYTE = b'\x02'
     ACK_BYTE = b'\x06'
     NAK_BYTE = b'\x15'
+
+    # Commands.
+    GET_IM_INFO = b'\x60'
+    GET_FIRST_ALL_LINK_RECORD = b'\x69'
+    GET_NEXT_ALL_LINK_RECORD = b'\x6A'
+    ALL_LINK_RECORD_RESPONSE = b'\x57'
 
     def __init__(self, *, serial_port_url, read_timeout=0.5, loop=None):
         assert serial_port_url
@@ -105,7 +112,7 @@ class Controller(object):
             )
             self.serial.write(data)
 
-    async def communicate(self, command, params, expected_size):
+    async def communicate(self, command, params=b'', expected_size=0):
         """
         Send a command and wait for a response of the specified size or fail.
 
@@ -133,9 +140,7 @@ class Controller(object):
 
         command_byte = await self.read(1)
 
-        if command_byte == self.NAK_BYTE:
-            raise AcknowledgmentFailure(command=command)
-        elif not command_byte == command:
+        if not command_byte == command:
             raise SynchronizationError(
                 "Expected a command byte but got %s instead" % \
                 hexlify(command_byte).decode(),
@@ -145,7 +150,9 @@ class Controller(object):
 
         ack_byte = await self.read(1)
 
-        if not ack_byte == self.ACK_BYTE:
+        if ack_byte == self.NAK_BYTE:
+            raise AcknowledgmentFailure(command=command)
+        elif ack_byte != self.ACK_BYTE:
             raise SynchronizationError(
                 "Expected an ACK byte but got %s instead" % \
                 hexlify(ack_byte).decode(),
@@ -155,10 +162,48 @@ class Controller(object):
 
         return response
 
+    async def read_message(self, command, expected_size):
+        """
+        Wait for a message to arrive.
+
+        :param command: The expected command message.
+        :param expected_size: The expected size of the message.
+        """
+        logger.debug(
+            "Waiting for message: %s. Expecting %s byte(s) back.",
+            hexlify(command).decode(),
+            expected_size,
+        )
+
+        prefix_byte = await self.read(1)
+
+        if not prefix_byte == self.PREFIX_BYTE:
+            raise SynchronizationError(
+                "Expected a prefix byte but got %s instead" % \
+                hexlify(prefix_byte).decode(),
+            )
+
+        command_byte = await self.read(1)
+
+        if not command_byte == command:
+            raise SynchronizationError(
+                "Expected a command byte but got %s instead" % \
+                hexlify(command_byte).decode(),
+            )
+
+        flags_byte = await self.read(1)
+
+        logger.debug("Message flags: %s", bin(flags_byte[0])[2:])
+
+        response = await self.read(expected_size)
+
+        logger.debug("Received response: %s.", hexlify(response).decode())
+
+        return response
+
     async def get_im_info(self):
         response = await self.communicate(
-            command=b'\x60',
-            params=b'',
+            command=self.GET_IM_INFO,
             expected_size=6,
         )
 
@@ -168,3 +213,27 @@ class Controller(object):
             device_subcategory=response[4],
             firmware_version=response[5],
         )
+
+    async def get_all_link_records(self):
+        records = []
+
+        try:
+            await self.communicate(command=self.GET_FIRST_ALL_LINK_RECORD)
+
+            while True:
+                response = await self.read_message(
+                    command=self.ALL_LINK_RECORD_RESPONSE,
+                    expected_size=7,
+                )
+                records.append(AllLinkRecord(
+                    group=response[0],
+                    identity=Identity(response[1:4]),
+                    data=response[4:],
+                ))
+
+                await self.communicate(command=self.GET_NEXT_ALL_LINK_RECORD)
+
+        except AcknowledgmentFailure:
+            pass
+
+        return records
