@@ -60,6 +60,9 @@ def pysteon(debug, serial_port_url):
     for record in records:
         print(record)
 
+    for _ in range(25):
+        print(loop.run_until_complete(controller.recv_response()))
+
     logger.info(
         "Pysteon closing...",
     )

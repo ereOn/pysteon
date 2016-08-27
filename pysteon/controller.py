@@ -6,46 +6,30 @@ import asyncio
 
 from binascii import hexlify
 from collections import defaultdict
-from io import (
-    SEEK_END,
-    SEEK_SET,
-)
 from serial import (
     EIGHTBITS,
     PARITY_NONE,
     STOPBITS_ONE,
     serial_for_url,
 )
-from serial.aio import create_serial_connection
 
 from .exceptions import (
     AcknowledgmentFailure,
-    ReadTimeout,
-    SynchronizationError,
+)
+from .messages import (
+    AllLinkRecordResponse,
+    GetFirstAllLinkRecordRequest,
+    GetFirstAllLinkRecordResponse,
+    GetIMInfoRequest,
+    GetIMInfoResponse,
+    GetNextAllLinkRecordRequest,
+    GetNextAllLinkRecordResponse,
+    Response,
 )
 from .log import logger
-from .objects import (
-    AllLinkRecord,
-    Identity,
-    IMInfo,
-)
-
-
-def get_bit(value, bit):
-    return (value & (1 << bit)) != 0
 
 
 class Controller(object):
-    PREFIX_BYTE = b'\x02'
-    ACK_BYTE = b'\x06'
-    NAK_BYTE = b'\x15'
-
-    # Commands.
-    GET_IM_INFO = b'\x60'
-    GET_FIRST_ALL_LINK_RECORD = b'\x69'
-    GET_NEXT_ALL_LINK_RECORD = b'\x6A'
-    ALL_LINK_RECORD_RESPONSE = b'\x57'
-
     def __init__(self, *, serial_port_url, loop=None):
         assert serial_port_url
 
@@ -62,7 +46,7 @@ class Controller(object):
         self.flush()
         self.serial_lock = asyncio.Lock()
         self._read_buffer = bytearray()
-        self._messages = defaultdict(list)
+        self._responses = defaultdict(list)
 
     def flush(self):
         self.serial.flushInput()
@@ -108,154 +92,95 @@ class Controller(object):
 
         :param data: The data to write.
         """
-        async with self.serial_lock:
-            logger.debug(
-                "Sent: %s (%s byte(s))",
-                hexlify(data).decode(),
-                len(data),
-            )
-            self.serial.write(data)
-
-    async def communicate(self, command, params=b'', expected_size=0):
-        """
-        Send a command and wait for a response of the specified size or fail.
-
-        :param command: The command to send, without any prefix.
-        :param expected_size: The expected size of the response, without its
-            prefix or suffix.
-        :returns: The response, without any prefix or suffix.
-        """
-        logger.debug(
-            "Sending command: %s (%s). Expecting %s byte(s) back.",
-            hexlify(command).decode(),
-            hexlify(params).decode(),
-            expected_size,
-        )
-        await self.write(self.PREFIX_BYTE)
-        await self.write(command)
-
-        prefix_byte = await self.read(1)
-
-        if not prefix_byte == self.PREFIX_BYTE:
-            raise SynchronizationError(
-                "Expected a prefix byte but got %s instead" % \
-                hexlify(prefix_byte).decode(),
-            )
-
-        command_byte = await self.read(1)
-
-        if not command_byte == command:
-            raise SynchronizationError(
-                "Expected a command byte but got %s instead" % \
-                hexlify(command_byte).decode(),
-            )
-
-        response = await self.read(expected_size)
-        ack_byte = await self.read(1)
-
-        if ack_byte == self.NAK_BYTE:
-            raise AcknowledgmentFailure(command=command)
-        elif ack_byte != self.ACK_BYTE:
-            raise SynchronizationError(
-                "Expected an ACK byte but got %s instead" % \
-                hexlify(ack_byte).decode(),
-            )
-
-        logger.debug("Received response: %s.", hexlify(response).decode())
-
-        return response
-
-    async def read_message(self, command=None):
-        """
-        Wait for a message to arrive.
-
-        :param command: The expected command to receive. If not specified, the
-            first received command will be returned.
-        """
-        if command:
-            logger.debug(
-                "Waiting for a message of type: %s.",
-                hexlify(command).decode(),
-            )
-
-            if self._messages.get(command):
-                return self._messages[command].pop(0)
-        else:
-            logger.debug("Waiting for any message.")
-
-        response = None
-
-        while not response:
-            prefix_byte = await self.read(1)
-
-            if not prefix_byte == self.PREFIX_BYTE:
-                raise SynchronizationError(
-                    "Expected a prefix byte but got %s instead" % \
-                    hexlify(prefix_byte).decode(),
+        if data:
+            async with self.serial_lock:
+                logger.debug(
+                    "Sent: %s (%s byte(s))",
+                    hexlify(data).decode(),
+                    len(data),
                 )
+                self.serial.write(data)
 
-            command_byte = await self.read(1)
-            flags_byte = (await self.read(1))[0]
-            max_hops = flags_byte & 0x03
-            hops_left = (flags_byte & 0x0c) >> 2
+    async def send_request(self, request):
+        """
+        Send a request.
 
-            flags = dict(
-                extended=get_bit(flags_byte, 4),
-                ack=get_bit(flags_byte, 5),
-                all_link=get_bit(flags_byte, 6),
-                broadcast=get_bit(flags_byte, 7),
-            )
-            expected_size = 19 if flags['extended'] else 7
+        :param request: The request.
+        """
+        logger.debug("Sending request: %s.", request)
 
-            response = await self.read(expected_size)
+        await request.write(self.write)
 
+    async def recv_response(self, expected_class=None):
+        """
+        Receive a response.
+
+        :param expected_class: The class of the expected response. Any other
+            received message during that time will be stored for later
+            retrieval.
+        :returns: A response.
+        """
+        if expected_class:
             logger.debug(
-                "Received message of type %s: %s. Info: %d/%d hops. Flags: %s",
-                hexlify(command_byte).decode(),
-                hexlify(response).decode(),
-                hops_left,
-                max_hops,
-                ', '.join(
-                    flag for flag, is_set in flags.items() if is_set
-                ),
+                "Waiting for a response of type: %s.",
+                expected_class.__name__,
             )
 
-            if command is not None and command_byte != command:
-                self._messages[command_byte].append(response)
-                response = None
+            responses = self._responses.get(expected_class)
 
-        return response
+            if responses:
+                try:
+                    return responses.pop(0)
+                finally:
+                    if not responses:
+                        del self._responses[expected_class]
+        else:
+            logger.debug("Waiting for any response.")
+
+            if self._responses:
+                expected_class, responses = next(self._responses.items())
+
+                try:
+                    return responses.pop(0)
+                finally:
+                    if not responses:
+                        del self._responses[expected_class]
+
+        while True:
+            response = await Response.read(self.read)
+
+            assert response
+
+            if not expected_class or isinstance(response, expected_class):
+                return response
+
+            self._responses[expected_class].append(response)
 
     async def get_im_info(self):
-        response = await self.communicate(
-            command=self.GET_IM_INFO,
-            expected_size=6,
-        )
+        await self.send_request(GetIMInfoRequest())
+        response = await self.recv_response(expected_class=GetIMInfoResponse)
 
-        return IMInfo(
-            identity=Identity(response[:3]),
-            device_category=response[3],
-            device_subcategory=response[4],
-            firmware_version=response[5],
-        )
+        return response.info
 
     async def get_all_link_records(self):
         records = []
 
         try:
-            await self.communicate(command=self.GET_FIRST_ALL_LINK_RECORD)
+            await self.send_request(GetFirstAllLinkRecordRequest())
+            await self.recv_response(
+                expected_class=GetFirstAllLinkRecordResponse,
+            )
 
             while True:
-                response = await self.read_message(
-                    command=self.ALL_LINK_RECORD_RESPONSE,
+                response = await self.recv_response(
+                    expected_class=AllLinkRecordResponse,
                 )
-                records.append(AllLinkRecord(
-                    group=response[0],
-                    identity=Identity(response[1:4]),
-                    data=response[4:],
-                ))
+                records.append(response.record)
 
-                await self.communicate(command=self.GET_NEXT_ALL_LINK_RECORD)
+                await self.send_request(GetNextAllLinkRecordRequest())
+                await self.recv_response(
+                    expected_class=GetNextAllLinkRecordResponse,
+                )
 
         except AcknowledgmentFailure:
             pass
