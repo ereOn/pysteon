@@ -18,6 +18,8 @@ from .exceptions import (
 )
 from .messages import (
     AllLinkRecordResponse,
+    CancelAllLinkingRequest,
+    CancelAllLinkingResponse,
     GetFirstAllLinkRecordRequest,
     GetFirstAllLinkRecordResponse,
     GetIMInfoRequest,
@@ -197,3 +199,7 @@ class Controller(object):
             ),
         )
         return await self.recv_response(expected_class=StartAllLinkingResponse)
+
+    async def cancel_all_linking_session(self):
+        await self.send_request(CancelAllLinkingRequest())
+        return await self.recv_response(expected_class=CancelAllLinkingResponse)

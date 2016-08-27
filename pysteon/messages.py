@@ -354,3 +354,11 @@ class StartAllLinkingResponse(Response):
             hexlify(self.all_link_group).decode(),
             self.all_link_code.name,
         )
+
+
+class CancelAllLinkingRequest(Request):
+    command = b'\x65'
+
+
+class CancelAllLinkingResponse(Response):
+    command = b'\x65'

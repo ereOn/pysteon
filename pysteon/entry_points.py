@@ -61,8 +61,8 @@ def pysteon(debug, serial_port_url):
     for record in records:
         print(record)
 
-    for _ in range(25):
-        print(loop.run_until_complete(controller.recv_response()))
+    #for _ in range(25):
+    #    print(loop.run_until_complete(controller.recv_response()))
 
     print(
         loop.run_until_complete(
@@ -70,6 +70,11 @@ def pysteon(debug, serial_port_url):
                 all_link_code=AllLinkCode.responder,
                 all_link_group=b'\x00',
             ),
+        ),
+    )
+    print(
+        loop.run_until_complete(
+            controller.cancel_all_linking_session(),
         ),
     )
 
