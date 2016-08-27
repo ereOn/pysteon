@@ -30,6 +30,10 @@ from .objects import (
 )
 
 
+def get_bit(value, bit):
+    return (value & (1 << bit)) != 0
+
+
 class Controller(object):
     PREFIX_BYTE = b'\x02'
     ACK_BYTE = b'\x06'
@@ -191,13 +195,28 @@ class Controller(object):
                 hexlify(command_byte).decode(),
             )
 
-        flags_byte = await self.read(1)
+        flags_byte = (await self.read(1))[0]
+        max_hops = flags_byte & 0x03
+        hops_left = (flags_byte & 0x0c) >> 2
 
-        logger.debug("Message flags: %s", bin(flags_byte[0])[2:])
+        flags = dict(
+            extended=get_bit(flags_byte, 4),
+            ack=get_bit(flags_byte, 5),
+            all_link=get_bit(flags_byte, 6),
+            broadcast=get_bit(flags_byte, 7),
+        )
 
         response = await self.read(expected_size)
 
-        logger.debug("Received response: %s.", hexlify(response).decode())
+        logger.debug(
+            "Received response: %s. Info: %d/%d hops. Flags: %s",
+            hexlify(response).decode(),
+            hops_left,
+            max_hops,
+            ', '.join(
+                flag for flag, is_set in flags.items() if is_set
+            ),
+        )
 
         return response
 
