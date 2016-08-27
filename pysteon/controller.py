@@ -46,7 +46,7 @@ class Controller(object):
     GET_NEXT_ALL_LINK_RECORD = b'\x6A'
     ALL_LINK_RECORD_RESPONSE = b'\x57'
 
-    def __init__(self, *, serial_port_url, read_timeout=0.5, loop=None):
+    def __init__(self, *, serial_port_url, loop=None):
         assert serial_port_url
 
         self.serial_port_url = serial_port_url
@@ -57,7 +57,7 @@ class Controller(object):
             parity=PARITY_NONE,
             stopbits=STOPBITS_ONE,
             bytesize=EIGHTBITS,
-            timeout=read_timeout,
+            timeout=1,
         )
         self.flush()
         self.serial_lock = asyncio.Lock()
@@ -88,19 +88,14 @@ class Controller(object):
                     cnt,
                 )
 
-                if not data:
-                    raise ReadTimeout(
-                        expected_size=cnt,
-                        data=self._read_buffer,
+                if data:
+                    logger.debug(
+                        "Read: %s (%s byte(s))",
+                        hexlify(data).decode(),
+                        len(data),
                     )
 
-                logger.debug(
-                    "Read: %s (%s byte(s))",
-                    hexlify(data).decode(),
-                    len(data),
-                )
-
-                self._read_buffer.extend(data)
+                    self._read_buffer.extend(data)
 
             result = self._read_buffer[:cnt]
             self._read_buffer[:] = self._read_buffer[cnt:]
@@ -156,7 +151,6 @@ class Controller(object):
             )
 
         response = await self.read(expected_size)
-
         ack_byte = await self.read(1)
 
         if ack_byte == self.NAK_BYTE:
@@ -211,7 +205,7 @@ class Controller(object):
                 all_link=get_bit(flags_byte, 6),
                 broadcast=get_bit(flags_byte, 7),
             )
-            expected_size = 21 if flags['extended'] else 7
+            expected_size = 19 if flags['extended'] else 7
 
             response = await self.read(expected_size)
 
