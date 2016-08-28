@@ -324,7 +324,7 @@ class StandardMessageReceivedResponse(Response):
             command_data=response,
         )
 
-    def __init__(self, from_, to, command_data):
+    def __init__(self, from_, to, hops, flags, command_data):
         self.from_ = from_
         self.to = to
         self.hops = hops
@@ -347,19 +347,23 @@ class ExtendedMessageReceivedResponse(Response):
         from_ = Identity(await read(3))
         to = Identity(await read(3))
 
-        _, flags = await cls.read_flags(read)
-        response = await read(16)
+        hops, flags = await cls.read_flags(read)
+        response = await read(2)
 
         return cls(
             from_=from_,
             to=to,
+            hops=hops,
+            flags=flags,
             command_data=response[:2],
             user_data=response[2:],
         )
 
-    def __init__(self, from_, to, command_data, user_data):
+    def __init__(self, from_, to, hops, flags, command_data, user_data):
         self.from_ = from_
         self.to = to
+        self.hops = hops
+        self.flags = flags
         self.command_data = command_data
         self.user_data = user_data
 
@@ -370,6 +374,21 @@ class ExtendedMessageReceivedResponse(Response):
             hexlify(self.command_data).decode(),
             hexlify(self.user_data).decode(),
         )
+
+
+class ResetRequest(Request):
+    command = b'\x67'
+
+
+class ResetResponse(Response):
+    command = b'\x67'
+
+
+class UserResetDetectedResponse(Response):
+    command = b'\x55'
+
+    def __str__(self):
+        return "Insteon Modem was reset from user action"
 
 
 class ButtonEventReportResponse(Response):
