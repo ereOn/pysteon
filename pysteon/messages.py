@@ -362,3 +362,46 @@ class CancelAllLinkingRequest(Request):
 
 class CancelAllLinkingResponse(Response):
     command = b'\x65'
+
+
+class AllLinkingCompleteResponse(Response):
+    command = b'\x53'
+
+    @classmethod
+    async def read_payload(cls, read):
+        response = await read(8)
+
+        return cls(
+            all_link_code=AllLinkCode(response[0]),
+            all_link_group=response[1:2],
+            identity=Identity(response[2:5]),
+            device_category=response[5],
+            device_subcategory=response[6],
+            firmware_version=response[7],
+        )
+
+    def __init__(
+        self,
+        all_link_code,
+        all_link_group,
+        identity,
+        device_category,
+        device_subcategory,
+        firmware_version,
+    ):
+        self.all_link_code = all_link_code
+        self.all_link_group = all_link_group
+        self.identity = identity
+        self.device_category = device_category
+        self.device_subcategory = device_subcategory
+        self.firmware_version = firmware_version
+
+    def __str__(self):
+        return (
+            "Insteon Modem all-linking complete with %s for group %s in "
+            "mode: %s"
+        ) % (
+            self.identity,
+            hexlify(self.all_link_group).decode(),
+            self.all_link_code.name,
+        )
