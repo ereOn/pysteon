@@ -45,11 +45,12 @@ class AllLinkCode(IntEnum):
     responder = 0x00
     controller = 0x01
     auto = 0x03
+    unknown = 0xfe
     delete = 0xff
 
 
 def has_bit(value, bit):
-    return (value & (1 << (7 - bit))) != 0
+    return (value & (1 << bit)) != 0
 
 
 class IndexMeta(type):
@@ -114,6 +115,15 @@ class Request(IndexBase, metaclass=IndexMeta):
         """
         await write(PREFIX_BYTE)
         await write(self.command)
+
+    async def write_flags(self, write, hops, flags):
+        hops_left, max_hops = hops
+        flags_byte = (hops_left & 0x03) << 2 | (max_hops & 0x03)
+
+        for flag in flags:
+            flags_byte |= (1 << flag.value)
+
+        await write(flags_byte.to_bytes(1, 'big'))
 
 
 class Response(IndexBase, metaclass=IndexMeta):
@@ -235,7 +245,67 @@ class AllLinkRecordResponse(Response):
         self.record = record
 
 
-class StandardMessageResponse(Response):
+class MessageSendRequest(Request):
+    command = b'\x62'
+
+    def __init__(self, to, hops, flags, command_data, user_data=None):
+        self.to = to
+        self.hops = hops
+        self.flags = flags
+        self.command_data = command_data
+        self.user_data = user_data
+
+        assert len(hops) == 2, "hops must be a 2-tuple"
+        assert len(command_data) == 2
+
+        if self.user_data is None:
+            self.flags.discard(Flags.extended)
+        else:
+            self.flags.add(Flags.extended)
+            assert len(user_data) == 14
+
+    async def write(self, write):
+        await super().write(write)
+        await write(self.to.value)
+        await self.write_flags(write, self.hops, self.flags)
+        await write(self.command_data)
+
+        if self.user_data:
+            await write(self.user_data)
+
+
+class MessageSendResponse(Response):
+    command = b'\x62'
+
+    @classmethod
+    async def read_payload(cls, read):
+        to = Identity(await read(3))
+        hops, flags = await cls.read_flags(read)
+        command_data = await read(2)
+
+        if Flags.extended in flags:
+            user_data = await read(14)
+        else:
+            user_data = None
+
+        return cls(
+            from_=from_,
+            to=to,
+            hops=hops,
+            flags=flags,
+            command_data=command_data,
+            user_data=user_data,
+        )
+
+    def __init__(self, to, hops, flags, command_data, user_data):
+        self.to = to
+        self.hops = hops
+        self.flags = flags
+        self.command_data = command_data
+        self.user_data = user_data
+
+
+class StandardMessageReceivedResponse(Response):
     command = b'\x50'
 
     @classmethod
@@ -243,14 +313,22 @@ class StandardMessageResponse(Response):
         from_ = Identity(await read(3))
         to = Identity(await read(3))
 
-        _, flags = await cls.read_flags(read)
+        hops, flags = await cls.read_flags(read)
         response = await read(2)
 
-        return cls(from_=from_, to=to, command_data=response)
+        return cls(
+            from_=from_,
+            to=to,
+            hops=hops,
+            flags=flags,
+            command_data=response,
+        )
 
     def __init__(self, from_, to, command_data):
         self.from_ = from_
         self.to = to
+        self.hops = hops
+        self.flags = flags
         self.command_data = command_data
 
     def __str__(self):
@@ -261,7 +339,7 @@ class StandardMessageResponse(Response):
         )
 
 
-class ExtendedMessageResponse(Response):
+class ExtendedMessageReceivedResponse(Response):
     command = b'\x51'
 
     @classmethod
@@ -362,6 +440,9 @@ class CancelAllLinkingRequest(Request):
 
 class CancelAllLinkingResponse(Response):
     command = b'\x65'
+
+    def __str__(self):
+        return "Insteon Modem all-linking session was cancelled."
 
 
 class AllLinkingCompleteResponse(Response):

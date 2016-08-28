@@ -7,6 +7,7 @@ from binascii import hexlify
 
 class Identity(object):
     def __init__(self, value):
+        assert len(value) == 3
         self.value = value
 
     def __str__(self):

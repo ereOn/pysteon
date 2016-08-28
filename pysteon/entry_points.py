@@ -61,22 +61,26 @@ def pysteon(debug, serial_port_url):
     for record in records:
         print(record)
 
-    #for _ in range(25):
-    #    print(loop.run_until_complete(controller.recv_response()))
+    for _ in range(25):
+        print(loop.run_until_complete(controller.recv_response()))
 
     print(
         loop.run_until_complete(
             controller.start_all_linking_session(
-                all_link_code=AllLinkCode.responder,
-                all_link_group=b'\x00',
+                all_link_code=AllLinkCode.delete,
+                all_link_group=b'\x01',
             ),
         ),
     )
-    print(
-        loop.run_until_complete(
-            controller.cancel_all_linking_session(),
-        ),
-    )
+
+    for _ in range(25):
+        print(loop.run_until_complete(controller.recv_response()))
+
+    #print(
+    #    loop.run_until_complete(
+    #        controller.cancel_all_linking_session(),
+    #    ),
+    #)
 
     logger.info(
         "Pysteon closing...",
