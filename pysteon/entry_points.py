@@ -12,7 +12,10 @@ from chromalog.mark.helpers.simple import important
 
 from .controller import Controller
 from .log import logger
-from .messages import AllLinkCode
+from .messages import (
+    AllLinkCode,
+    Flags,
+)
 
 
 def setup_logging(debug):
@@ -61,26 +64,38 @@ def pysteon(debug, serial_port_url):
     for record in records:
         print(record)
 
-    for _ in range(25):
-        print(loop.run_until_complete(controller.recv_response()))
-
-    print(
-        loop.run_until_complete(
-            controller.start_all_linking_session(
-                all_link_code=AllLinkCode.delete,
-                all_link_group=b'\x01',
+    for x in range(5):
+        print(
+            loop.run_until_complete(
+                controller.send_message(
+                    to=records[-1].identity,
+                    hops=(3, 3),
+                    flags=set(),
+                    command_data=b'\x11\xff',
+                ),
             ),
-        ),
-    )
+        )
+
+        import time
+        time.sleep(1)
+
+        print(
+            loop.run_until_complete(
+                controller.send_message(
+                    to=records[-1].identity,
+                    hops=(3, 3),
+                    flags=set(),
+                    command_data=b'\x13\xff',
+                ),
+            ),
+        )
+
+        import time
+        time.sleep(1)
+
 
     for _ in range(25):
         print(loop.run_until_complete(controller.recv_response()))
-
-    #print(
-    #    loop.run_until_complete(
-    #        controller.cancel_all_linking_session(),
-    #    ),
-    #)
 
     logger.info(
         "Pysteon closing...",

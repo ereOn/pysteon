@@ -5,7 +5,6 @@ A controller.
 import asyncio
 
 from binascii import hexlify
-from collections import defaultdict
 from serial import (
     EIGHTBITS,
     PARITY_NONE,
@@ -26,6 +25,8 @@ from .messages import (
     GetIMInfoResponse,
     GetNextAllLinkRecordRequest,
     GetNextAllLinkRecordResponse,
+    MessageSendRequest,
+    MessageSendResponse,
     Response,
     StartAllLinkingRequest,
     StartAllLinkingResponse,
@@ -50,7 +51,7 @@ class Controller(object):
         self.flush()
         self.serial_lock = asyncio.Lock()
         self._read_buffer = bytearray()
-        self._responses = defaultdict(list)
+        self._responses = []
 
     def flush(self):
         self.serial.flushInput()
@@ -130,25 +131,21 @@ class Controller(object):
                 expected_class.__name__,
             )
 
-            responses = self._responses.get(expected_class)
+            response = next(
+                (
+                    r for r in self._responses
+                    if isinstance(r, expected_class)
+                ),
+                None,
+            )
 
-            if responses:
-                try:
-                    return responses.pop(0)
-                finally:
-                    if not responses:
-                        del self._responses[expected_class]
+            if response:
+                self._responses.remove(response)
         else:
             logger.debug("Waiting for any response.")
 
             if self._responses:
-                expected_class, responses = next(self._responses.items())
-
-                try:
-                    return responses.pop(0)
-                finally:
-                    if not responses:
-                        del self._responses[expected_class]
+                return self._responses.pop(0)
 
         while True:
             response = await Response.read(self.read)
@@ -158,7 +155,7 @@ class Controller(object):
             if not expected_class or isinstance(response, expected_class):
                 return response
 
-            self._responses[expected_class].append(response)
+            self._responses.append(response)
 
     async def get_im_info(self):
         await self.send_request(GetIMInfoRequest())
@@ -202,4 +199,22 @@ class Controller(object):
 
     async def cancel_all_linking_session(self):
         await self.send_request(CancelAllLinkingRequest())
-        return await self.recv_response(expected_class=CancelAllLinkingResponse)
+        return await self.recv_response(
+            expected_class=CancelAllLinkingResponse,
+        )
+
+    async def send_message(
+        self,
+        to,
+        hops,
+        flags,
+        command_data,
+        user_data=None,
+    ):
+        await self.send_request(MessageSendRequest(
+            to=to,
+            hops=hops,
+            flags=flags,
+            command_data=command_data,
+        ))
+        return await self.recv_response(expected_class=MessageSendResponse)

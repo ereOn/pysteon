@@ -288,8 +288,9 @@ class MessageSendResponse(Response):
         else:
             user_data = None
 
+        await cls.read_ack_or_nak(read)
+
         return cls(
-            from_=from_,
             to=to,
             hops=hops,
             flags=flags,
@@ -303,6 +304,14 @@ class MessageSendResponse(Response):
         self.flags = flags
         self.command_data = command_data
         self.user_data = user_data
+
+    def __str__(self):
+        return "Standard message sent to %s: %s, %s" % (
+            self.to,
+            hexlify(self.command_data).decode(),
+            hexlify(self.user_data).decode()
+            if self.user_data else '<no user data>',
+        )
 
 
 class StandardMessageReceivedResponse(Response):
