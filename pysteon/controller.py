@@ -74,7 +74,7 @@ class Controller(object):
                 data = await self.loop.run_in_executor(
                     None,
                     self.serial.read,
-                    cnt,
+                    cnt - len(self._read_buffer),
                 )
 
                 if data:

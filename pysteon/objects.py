@@ -40,14 +40,24 @@ class IMInfo(object):
 
 
 class AllLinkRecord(object):
-    def __init__(self, group, identity, data):
+    def __init__(self, flags, group, identity, data):
+        self.flags = flags
         self.group = group
         self.identity = identity
         self.data = data
 
+    @property
+    def controller(self):
+        return self.flags & 0x40
+
+    @property
+    def responder(self):
+        return not self.controller
+
     def __str__(self):
-        return "%s - %02x (%s)" % (
+        return "%s - %s - %02x (%s)" % (
             self.identity,
+            'controller' if self.controller else 'responder',
             self.group,
             hexlify(self.data).decode(),
         )

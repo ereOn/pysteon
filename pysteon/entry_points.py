@@ -14,6 +14,7 @@ from .controller import Controller
 from .log import logger
 from .messages import (
     AllLinkCode,
+    AllLinkingCompleteResponse,
     Flags,
 )
 
@@ -59,43 +60,46 @@ def pysteon(debug, serial_port_url):
         "Pysteon started. Connected to: %s",
         important(im_info),
     )
-    records = loop.run_until_complete(controller.get_all_link_records())
 
-    for record in records:
-        print(record)
+    async def foo():
+        records = await controller.get_all_link_records()
 
-    for x in range(5):
-        print(
-            loop.run_until_complete(
-                controller.send_message(
-                    to=records[-1].identity,
-                    hops=(3, 3),
-                    flags=set(),
-                    command_data=b'\x11\xff',
-                ),
-            ),
+        for record in records:
+            print(record)
+
+        logger.info("Turning led off")
+
+        await controller.write(b'\x02\x6e')
+        print(await controller.read(3))
+
+        return
+        await controller.start_all_linking_session(
+            all_link_code=AllLinkCode.controller,
+            all_link_group=b'\xfe',
         )
 
-        import time
-        time.sleep(1)
+        print(await controller.recv_response(
+            expected_class=AllLinkingCompleteResponse,
+        ))
 
-        print(
-            loop.run_until_complete(
-                controller.send_message(
-                    to=records[-1].identity,
-                    hops=(3, 3),
-                    flags=set(),
-                    command_data=b'\x13\xff',
-                ),
-            ),
+        await controller.start_all_linking_session(
+            all_link_code=AllLinkCode.responder,
+            all_link_group=b'\x01',
         )
 
-        import time
-        time.sleep(1)
+        print(await controller.recv_response(
+            expected_class=AllLinkingCompleteResponse,
+        ))
 
+        records = await controller.get_all_link_records()
 
-    for _ in range(25):
-        print(loop.run_until_complete(controller.recv_response()))
+        for record in records:
+            print(record)
+
+        for x in range(20):
+            print(await controller.recv_response())
+
+    loop.run_until_complete(foo())
 
     logger.info(
         "Pysteon closing...",

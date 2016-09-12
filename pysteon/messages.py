@@ -232,13 +232,13 @@ class AllLinkRecordResponse(Response):
 
     @classmethod
     async def read_payload(cls, read):
-        _, flags = await cls.read_flags(read)
-        response = await read(MESSAGE_SIZE)
+        response = await read(8)
 
         return cls(record=AllLinkRecord(
-            group=response[0],
-            identity=Identity(response[1:4]),
-            data=response[4:],
+            flags=response[0],
+            group=response[1],
+            identity=Identity(response[2:5]),
+            data=response[5:],
         ))
 
     def __init__(self, record):
