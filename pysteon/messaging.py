@@ -13,8 +13,47 @@ from .log import logger
 MESSAGE_START_BYTE = 0x02
 
 class CommandCode(IntEnum):
+    """
+    Implements the command codes as defined in the Insteon's Modem Developer's
+    Guide (page 12).
+    """
+
+    # If you add commands here you MUST also update the `BODY_SIZES` dictionary
+    # below. Failure to do so will result in a crash upon reception of those
+    # messages.
+
+    # Messages sent from IM to host.
     standard_message_received = 0x50
     extended_message_received = 0x51
+    x10_received = 0x52
+    all_linking_completed = 0x53
+    button_event_report = 0x54
+    user_reset_detected = 0x55
+    all_link_cleanup_failure_report = 0x56
+    all_link_record_response = 0x57
+    all_link_cleanup_status_report = 0x58
+
+    # Messages sent from host to IM.
+    get_im_info = 0x60
+    send_all_link_command = 0x61
+    send_standard_or_extended_message = 0x62
+    send_x10 = 0x63
+    start_all_linking = 0x64
+    cancel_all_linking = 0x65
+    set_host_device_category = 0x66
+    reset_im = 0x67
+    set_ack_message_byte = 0x68
+    get_first_all_link_record = 0x69
+    get_next_all_link_record = 0x6a
+    set_im_configuration = 0x6b
+    get_all_link_record_for_sender = 0x6c
+    led_on = 0x6d
+    led_off = 0x6e
+    manage_all_link_record = 0x6f
+    set_nak_message_byte = 0x70
+    set_nak_message_two_bytes = 0x71
+    rf_sleep = 0x72
+    get_im_configuration = 0x73
 
 
 BODY_SIZES = {
