@@ -18,11 +18,11 @@ class CommandCode(IntEnum):
     Guide (page 12).
     """
 
+    # Messages sent from IM to host.
+    #
     # If you add commands here you MUST also update the `BODY_SIZES` dictionary
     # below. Failure to do so will result in a crash upon reception of those
     # messages.
-
-    # Messages sent from IM to host.
     standard_message_received = 0x50
     extended_message_received = 0x51
     x10_received = 0x52
@@ -59,6 +59,13 @@ class CommandCode(IntEnum):
 BODY_SIZES = {
     CommandCode.standard_message_received: 9,
     CommandCode.extended_message_received: 23,
+    CommandCode.x10_received: 2,
+    CommandCode.all_linking_completed: 8,
+    CommandCode.button_event_report: 1,
+    CommandCode.user_reset_detected: 0,
+    CommandCode.all_link_cleanup_failure_report: 5,
+    CommandCode.all_link_record_response: 8,
+    CommandCode.all_link_cleanup_status_report: 1,
 }
 
 
