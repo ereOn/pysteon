@@ -51,18 +51,20 @@ class IncomingMessage(object):
 
 def parse_messages(buffer):
     """
-    Generator that parses all messages found in `buffer`.
+    Parses all messages found in `buffer`.
 
     :param buffer: The buffer to extract the message from. If a message is
         found, it will be removed from `buffer`.
-    :yields: Messages.
+    :returns: A tuple (messages, expected).
     """
-    message = parse_message(buffer)
+    messages = []
+    message, expected = parse_message(buffer)
 
     while message:
-        yield message
+        messages.append(message)
+        message, expected = parse_message(buffer)
 
-        message = parse_message(buffer)
+    return messages, expected
 
 
 def parse_message(buffer):
@@ -71,13 +73,15 @@ def parse_message(buffer):
 
     :param buffer: The buffer to extract the message from. If a message is
         found, it will be removed from `buffer`.
-    :returns: The message or `None` if none is found.
+    :returns: A tuple (message, expected). Message is `None` if no complete
+        message can be read. `expected` is the minimum number of bytes to read
+        next.
     """
     _discard_until_message_start(buffer)
 
     # It takes at least 2 bytes to move forward.
     if len(buffer) < 2:
-        return
+        return None, 2 - len(buffer)
 
     try:
         command_code = CommandCode(buffer[1])
@@ -88,16 +92,18 @@ def parse_message(buffer):
         )
         buffer[:2] = []
 
-        return
+        return None, 2
 
-    body = _extract_body(buffer, BODY_SIZES[command_code])
+    body, expected = _extract_body(buffer, BODY_SIZES[command_code])
 
     # Not enough bytes to process the message. Let's wait for more.
     if not body:
-        return
+        return None, expected
 
-    return IncomingMessage(command_code=command_code, body=body)
-
+    return (
+        IncomingMessage(command_code=command_code, body=body),
+        max(2 - len(buffer), 1),
+    )
 
 
 # Private functions below.
@@ -133,14 +139,16 @@ def _extract_body(buffer, size):
     :param buffer: The buffer to extract the body from.
     :param size: The size of the body to extract. The message start and command
         code bytes are *NOT* part of size but will be removed nonetheless.
-    :returns: The body, as a bytearray or `None` if not enough bytes are
-        available. In the latter case, no bytes are extracted from `buffer`.
+    :returns: A tuple (body, expected). The body iss a bytearray or `None` if
+        not enough bytes are available. In the latter case, no bytes are
+        extracted from `buffer`. `expected` is the next minimum number of bytes
+        to read.
     """
     # We account for the message start and command code bytes, hence the +2.
     if len(buffer) < size + 2:
-        return
+        return None, size + 2 - len(buffer)
 
     body = buffer[2:size + 2]
     buffer[:size + 2] = []
 
-    return body
+    return body, 0
