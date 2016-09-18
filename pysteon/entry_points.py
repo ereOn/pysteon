@@ -63,5 +63,11 @@ def pysteon(ctx, debug, serial_port_url):
 @pysteon.command()
 @click.pass_context
 def info(ctx):
+    from .messaging import (
+        CommandCode,
+        OutgoingMessage,
+    )
+    plm = ctx.obj['plm']
+    plm.write(OutgoingMessage(command_code=CommandCode.get_im_info))
     import time
     time.sleep(60)

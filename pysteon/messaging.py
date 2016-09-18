@@ -34,6 +34,10 @@ class CommandCode(IntEnum):
     all_link_cleanup_status_report = 0x58
 
     # Messages sent from host to IM.
+    #
+    # If you add commands here you MUST also update the `BODY_SIZES` dictionary
+    # below with the size for the RESPONSE messages, not the REQUESTS. Failure
+    # to do so will result in a crash upon reception of those responses.
     get_im_info = 0x60
     send_all_link_command = 0x61
     send_standard_or_extended_message = 0x62
@@ -57,6 +61,7 @@ class CommandCode(IntEnum):
 
 
 BODY_SIZES = {
+    # Messages sent from IM to host.
     CommandCode.standard_message_received: 9,
     CommandCode.extended_message_received: 23,
     CommandCode.x10_received: 2,
@@ -66,15 +71,17 @@ BODY_SIZES = {
     CommandCode.all_link_cleanup_failure_report: 5,
     CommandCode.all_link_record_response: 8,
     CommandCode.all_link_cleanup_status_report: 1,
+
+    # Messages response sent from IM.
+    CommandCode.get_im_info: 7,
 }
 
 
-class IncomingMessage(object):
+class BaseMessage(object):
     """
-    Represents an incoming message.
+    Base class for messages.
     """
-
-    def __init__(self, command_code, body):
+    def __init__(self, command_code, body=b''):
         self.command_code = command_code
         self.body = bytearray(body)
 
@@ -91,8 +98,35 @@ class IncomingMessage(object):
     def __repr__(self):
         return repr(bytes(self))
 
+
+class IncomingMessage(BaseMessage):
+    """
+    Represents an incoming message.
+    """
+
     def __str__(self):
-        return "[<<<] 0x%02x: %s" % (self.command_code.value, self.body.hex())
+        if self.body:
+            return "[<<<] 0x%02x: %s" % (
+                self.command_code.value,
+                self.body.hex(),
+            )
+        else:
+            return "[<<<] 0x%02x" % self.command_code.value
+
+
+class OutgoingMessage(BaseMessage):
+    """
+    Represents an outgoing message.
+    """
+
+    def __str__(self):
+        if self.body:
+            return "[>>>] 0x%02x: %s" % (
+                self.command_code.value,
+                self.body.hex(),
+            )
+        else:
+            return "[>>>] 0x%02x" % self.command_code.value
 
 
 def parse_messages(buffer):
@@ -150,6 +184,17 @@ def parse_message(buffer):
         IncomingMessage(command_code=command_code, body=body),
         max(2 - len(buffer), 1),
     )
+
+
+def format_message(command_code, body=b''):
+    """
+    Format a message for writing on the PLM.
+
+    :param command_code: The command code.
+    :param body: An optional body to send with the command.
+    :returns: The formatted buffer, ready to be sent.
+    """
+    return bytes([MESSAGE_START_BYTE, command_code.value]) + body
 
 
 # Private functions below.

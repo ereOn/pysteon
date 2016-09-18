@@ -14,8 +14,13 @@ from threading import (
     Thread,
 )
 
-from .log import logger
-from .messaging import parse_messages
+from .log import logger as main_logger
+from .messaging import (
+    format_message,
+    parse_messages,
+)
+
+logger = main_logger.getChild('serial')
 
 
 class PowerLineModem(object):
@@ -48,6 +53,21 @@ class PowerLineModem(object):
         self._serial.close()
         self._serial = None
 
+    def write(self, message):
+        """
+        Write a command to the PLM.
+
+        :param message: A message to send.
+        """
+        logger.debug("%s", message)
+
+        self._serial.write(
+            format_message(
+                command_code=message.command_code,
+                body=message.body,
+            ),
+        )
+
     # Private methods below.
 
     def _flush(self):
@@ -74,4 +94,4 @@ class PowerLineModem(object):
                     if messages:
                         # TODO: Advertise somehow.
                         for message in messages:
-                            print(message)
+                            logger.debug("%s", message)
