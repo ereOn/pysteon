@@ -4,7 +4,14 @@ Unit tests for objects.
 
 import pytest
 
-from pysteon.objects import Identity
+from pysteon.objects import (
+    DeviceCategory,
+    DimmableLightingControlSubcategory,
+    GenericDeviceCategory,
+    GenericSubcategory,
+    Identity,
+    parse_device_categories,
+)
 
 
 def test_identity_invalid_id():
@@ -44,3 +51,39 @@ def test_identity_str():
     ident = Identity(b'\x01\x02\x03')
 
     assert str(ident) == '01.02.03'
+
+
+def test_parse_device_categories():
+    devcat, subcat = parse_device_categories(b'\x01\x01')
+
+    assert devcat == DeviceCategory.dimmable_lighting_control
+    assert subcat == \
+        DimmableLightingControlSubcategory.switchlinc_v2_dimmer_600w
+
+
+def test_parse_device_categories_unknown_category():
+    devcat, subcat = parse_device_categories(b'\xfe\x01')
+
+    assert devcat == GenericDeviceCategory(0xfe)
+    assert subcat == GenericSubcategory(0x01)
+
+
+def test_parse_device_categories_unknown_sub_category():
+    devcat, subcat = parse_device_categories(b'\x01\xfe')
+
+    assert devcat == DeviceCategory.dimmable_lighting_control
+    assert subcat == GenericSubcategory(0xfe)
+
+
+def test_device_categories():
+    devcat = DeviceCategory(0x01)
+
+    assert devcat == DeviceCategory.dimmable_lighting_control
+    assert devcat.title == "Dimmable Lighting Control"
+    assert devcat.subcategory_class is DimmableLightingControlSubcategory
+
+    subcat = devcat.subcategory_class(0x01)
+
+    assert subcat == \
+        DimmableLightingControlSubcategory.switchlinc_v2_dimmer_600w
+    assert subcat.title == "SwitchLinc V2 Dimmer 600W [2476D]"
