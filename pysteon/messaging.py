@@ -12,6 +12,7 @@ from .log import logger
 
 MESSAGE_START_BYTE = 0x02
 
+
 class CommandCode(IntEnum):
     """
     Implements the command codes as defined in the Insteon's Modem Developer's

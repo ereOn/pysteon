@@ -308,7 +308,6 @@ class IrrigationControlSubcategory(IntEnum):
         }[self]
 
 
-
 class ClimateControlSubcategory(IntEnum):
     broan_smsc080_exhaust_fan = 0x00
     compacta_eztherm = 0x01
