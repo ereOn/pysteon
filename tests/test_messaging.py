@@ -76,5 +76,19 @@ def test_parse_message_standard_message_received_padding():
     assert buffer == b'\x55'
 
 
+def test_parse_message_standard_message_received_null_padding():
+    buffer = bytearray(
+        b'\x00\x00\x00\x02\x50\x0a\x0b\x0c\x01\x02\x03\xe0\x0a\x0b',
+    )
+    message, expected = parse_message(buffer)
+
+    assert message == IncomingMessage(
+        command_code=CommandCode.standard_message_received,
+        body=b'\x0a\x0b\x0c\x01\x02\x03\xe0\x0a\x0b',
+    )
+    assert expected == 2
+    assert buffer == b''
+
+
 def test_parse_message_invalid():
     assert parse_message(bytearray(b'\x01\x03')) == (None, 2)

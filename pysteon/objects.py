@@ -284,6 +284,8 @@ class NetworkBridgesSubcategory(IntEnum):
     icon_powerlinc_serial = 0x03
     icon_powerlinc_usb = 0x04
     smartlabs_power_line_modem_serial = 0x05
+    powerlinc_dual_band_serial = 0x14  # This may be wrong.
+    powerlinc_dual_band_usb = 0x15
 
     @property
     def title(self):
@@ -294,6 +296,9 @@ class NetworkBridgesSubcategory(IntEnum):
             self.icon_powerlinc_usb: "Icon PowerLinc USB [2814U] ",
             self.smartlabs_power_line_modem_serial:
             "Smartlabs Power Line Modem Serial [2412S]",
+            self.powerlinc_dual_band_serial:
+            "PowerLinc Dual Band Serial [2413S]",
+            self.powerlinc_dual_band_usb: "PowerLinc Dual Band USB [2413U]",
         }[self]
 
 

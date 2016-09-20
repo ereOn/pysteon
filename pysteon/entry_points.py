@@ -2,6 +2,7 @@
 Entry points.
 """
 
+import asyncio
 import chromalog
 import click
 import logging
@@ -46,7 +47,11 @@ def pysteon(ctx, debug, serial_port_url):
         important(serial_port_url),
     )
 
-    plm = ctx.obj['plm'] = PowerLineModem(serial_port_url=serial_port_url)
+    loop = ctx.obj['loop'] = asyncio.get_event_loop()
+    plm = ctx.obj['plm'] = PowerLineModem(
+        serial_port_url=serial_port_url,
+        loop=loop,
+    )
 
     @ctx.call_on_close
     def close_plm():
@@ -63,11 +68,14 @@ def pysteon(ctx, debug, serial_port_url):
 @pysteon.command()
 @click.pass_context
 def info(ctx):
-    from .messaging import (
-        CommandCode,
-        OutgoingMessage,
-    )
+    debug = ctx.obj['debug']
+    loop = ctx.obj['loop']
     plm = ctx.obj['plm']
-    plm.write(OutgoingMessage(command_code=CommandCode.get_im_info))
-    import time
-    time.sleep(60)
+
+    try:
+        print(loop.run_until_complete(plm.get_info()))
+    except Exception as ex:
+        if debug:
+            logger.exception("Unexpected error.")
+        else:
+            logger.error("Unexpected error: %s.", ex)

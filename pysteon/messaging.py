@@ -7,6 +7,7 @@ http://cache.insteon.com/developer/2413dev-042007-en.pdf
 
 from enum import IntEnum
 
+from .exceptions import CommandFailure
 from .log import logger
 
 
@@ -130,6 +131,22 @@ class OutgoingMessage(BaseMessage):
             return "[>>>] 0x%02x" % self.command_code.value
 
 
+def check_ack_or_nak(command_code, value):
+    """
+    Check that the command was acknowledged.
+
+    :param command_code: The command code. Used for context.
+    :param value: The value to check. If `value` is not 0x06, a
+        `CommandFailure` is raised.
+    """
+    if value == 0x06:
+        return
+    elif value == 0x15:
+        raise CommandFailure(command_code=command_code)
+    else:
+        raise RuntimeError("Unexpected ACK/NAK value (0x%02x)" % value)
+
+
 def parse_messages(buffer):
     """
     Parses all messages found in `buffer`.
@@ -216,12 +233,13 @@ def _discard_until_message_start(buffer):
             break
 
     if discarded_bytes:
+        buffer[:len(discarded_bytes)] = []
+        discarded_bytes = discarded_bytes.lstrip(b'\x00')
         logger.warning(
             "Discarding %s unexpected byte(s): %s",
             len(discarded_bytes),
             discarded_bytes.hex(),
         )
-        buffer[:len(discarded_bytes)] = []
 
 
 def _extract_body(buffer, size):
