@@ -63,6 +63,7 @@ class PowerLineModem(object):
         self.__thread = Thread(target=self._run)
         self.__thread.daemon = True
         self.__thread.start()
+        self.__write_lock = asyncio.Lock(loop=self.loop)
 
         logger.debug("Querying PLM's information...")
         (
@@ -85,12 +86,14 @@ class PowerLineModem(object):
         self._serial.close()
         self._serial = None
 
-    def write(self, message):
+    def write(self, *args, **kwargs):
         """
         Write a command to the PLM.
 
-        :param message: A message to send.
+        :param args: The arguments to pass to the `OutgoingMessage`
+            constructor.
         """
+        message = OutgoingMessage(*args, **kwargs)
         logger.debug("%s", message)
 
         self._serial.write(
@@ -129,9 +132,10 @@ class PowerLineModem(object):
         :returns: A 4-tuple (identity, device category, device subcategory,
             firmware version).
         """
-        with self.read(command_codes=[CommandCode.get_im_info]) as queue:
-            self.write(OutgoingMessage(command_code=CommandCode.get_im_info))
-            response = await queue.get()
+        async with self.__write_lock:
+            with self.read(command_codes=[CommandCode.get_im_info]) as queue:
+                self.write(command_code=CommandCode.get_im_info)
+                response = await queue.get()
 
         identity = Identity(response.body[:3])
         device_category, device_subcategory = parse_device_categories(
