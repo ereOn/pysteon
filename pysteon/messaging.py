@@ -235,11 +235,13 @@ def _discard_until_message_start(buffer):
     if discarded_bytes:
         buffer[:len(discarded_bytes)] = []
         discarded_bytes = discarded_bytes.lstrip(b'\x00')
-        logger.warning(
-            "Discarding %s unexpected byte(s): %s",
-            len(discarded_bytes),
-            discarded_bytes.hex(),
-        )
+
+        if discarded_bytes:
+            logger.warning(
+                "Discarding %s unexpected byte(s): %s",
+                len(discarded_bytes),
+                discarded_bytes.hex(),
+            )
 
 
 def _extract_body(buffer, size):

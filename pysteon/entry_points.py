@@ -15,13 +15,17 @@ from .log import logger
 
 
 def _setup_logging(debug):
-    chromalog.basicConfig(
-        level=logging.DEBUG if debug else logging.INFO,
-        format='[%(levelname)s] %(message)s',
-    )
-
     if debug:
+        chromalog.basicConfig(
+            level=logging.DEBUG,
+            format='[%(levelname)s] %(message)s',
+        )
         logging.getLogger('asyncio').setLevel(logging.INFO)
+    else:
+        chromalog.basicConfig(
+            level=logging.INFO,
+            format='%(message)s',
+        )
 
 
 @click.group()
@@ -73,7 +77,21 @@ def info(ctx):
     plm = ctx.obj['plm']
 
     try:
-        print(loop.run_until_complete(plm.get_info()))
+        logger.info(
+            "Device information for PowerLine Modem on serial port: %s",
+            important(plm.serial_port_url),
+        )
+        logger.info(
+            "Device category: %s (%s)",
+            important(plm.device_category.title),
+            plm.device_category.examples,
+        )
+        logger.info(
+            "Device subcategory: %s",
+            important(plm.device_subcategory.title),
+        )
+        logger.info("Identity: %s", important(plm.identity))
+        logger.info("Firmware version: %s", important(plm.firmware_version))
     except Exception as ex:
         if debug:
             logger.exception("Unexpected error.")
