@@ -2,32 +2,24 @@
 Objects.
 """
 
-from enum import IntEnum
+from collections import namedtuple
+from enum import (
+    Enum,
+    IntEnum,
+)
 
 
-class Identity(object):
+class Identity(bytes):
     """
     Represents an identity.
     """
 
-    def __init__(self, id_):
+    def __new__(cls, id_):
         assert len(id_) == 3
-        self.id_ = bytes(id_)
-
-    def __eq__(self, value):
-        if not isinstance(value, Identity):
-            return NotImplemented
-
-        return self.id_ == value.id_
-
-    def __bytes__(self):
-        return self.id_
-
-    def __repr__(self):
-        return repr(bytes(self))
+        return super().__new__(cls, id_)
 
     def __str__(self):
-        return '%02x.%02x.%02x' % tuple(self.id_)
+        return '%02x.%02x.%02x' % tuple(self)
 
 
 def parse_device_categories(value):
@@ -361,3 +353,52 @@ class GenericSubcategory(object):
             return NotImplemented
 
         return value.value == self.value
+
+
+def parse_all_link_record_response(value):
+    """
+    Parse an All-Link record response.
+
+    :param value: The buffer to parse.
+    :returns: An `AllLinkRecordResponse` instance.
+    """
+    assert len(value) == 8
+
+    return AllLinkRecord(
+        identity=Identity(value[2:5]),
+        group=value[1],
+        role=AllLinkRole(bool(value[0] & 0x40)),
+        data=value[5:8],
+    )
+
+
+
+class AllLinkRole(Enum):
+    responder = False
+    controller = True
+
+    def __str__(self):
+        if self is AllLinkRole.controller:
+            return 'controller'
+        else:
+            return 'responder'
+
+
+class AllLinkRecord(
+    namedtuple(
+        '_AllLinkRecord',
+        [
+            'role',
+            'identity',
+            'group',
+            'data',
+        ],
+    ),
+):
+    def __str__(self):
+        return "%s-%02x (%s, %s)" % (
+            self.identity,
+            self.group,
+            self.role,
+            self.data.hex(),
+        )

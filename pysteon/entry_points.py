@@ -92,6 +92,23 @@ def info(ctx):
         )
         logger.info("Identity: %s", important(plm.identity))
         logger.info("Firmware version: %s", important(plm.firmware_version))
+
+        controllers, responders = loop.run_until_complete(
+            plm.get_all_link_records(),
+        )
+
+        if controllers:
+            logger.info("Controllers:")
+
+            for controller in controllers:
+                logger.info("%s", controller)
+
+        if responders:
+            logger.info("Responders:")
+
+            for responder in responders:
+                logger.info("%s", responder)
+
     except Exception as ex:
         if debug:
             logger.exception("Unexpected error.")

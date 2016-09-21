@@ -76,6 +76,8 @@ BODY_SIZES = {
 
     # Messages response sent from IM.
     CommandCode.get_im_info: 7,
+    CommandCode.get_first_all_link_record: 1,
+    CommandCode.get_next_all_link_record: 1,
 }
 
 
@@ -131,18 +133,19 @@ class OutgoingMessage(BaseMessage):
             return "[>>>] 0x%02x" % self.command_code.value
 
 
-def check_ack_or_nak(command_code, value):
+def check_ack_or_nak(message):
     """
     Check that the command was acknowledged.
 
-    :param command_code: The command code. Used for context.
-    :param value: The value to check. If `value` is not 0x06, a
-        `CommandFailure` is raised.
+    :param message: The incoming message. If the message was not acknowledged,
+        a `CommandFailure` is raised.
     """
+    value = message.body[-1]
+
     if value == 0x06:
         return
     elif value == 0x15:
-        raise CommandFailure(command_code=command_code)
+        raise CommandFailure(command_code=message.command_code)
     else:
         raise RuntimeError("Unexpected ACK/NAK value (0x%02x)" % value)
 
@@ -195,7 +198,7 @@ def parse_message(buffer):
     body, expected = _extract_body(buffer, BODY_SIZES[command_code])
 
     # Not enough bytes to process the message. Let's wait for more.
-    if not body:
+    if body is None:
         return None, expected
 
     return (

@@ -18,6 +18,7 @@ from threading import (
     Thread,
 )
 
+from .exceptions import CommandFailure
 from .log import logger as main_logger
 from .messaging import (
     CommandCode,
@@ -27,7 +28,9 @@ from .messaging import (
     parse_messages,
 )
 from .objects import (
+    AllLinkRole,
     Identity,
+    parse_all_link_record_response,
     parse_device_categories,
 )
 
@@ -137,14 +140,54 @@ class PowerLineModem(object):
                 self.write(command_code=CommandCode.get_im_info)
                 response = await queue.get()
 
+        check_ack_or_nak(response)
         identity = Identity(response.body[:3])
         device_category, device_subcategory = parse_device_categories(
             response.body[3:5],
         )
         firmware_version = response.body[5]
-        check_ack_or_nak(CommandCode.get_im_info, response.body[-1])
 
         return identity, device_category, device_subcategory, firmware_version
+
+    async def get_all_link_records(self):
+        """
+        Get all controllers and responders associated to the PLM.
+
+        :returns: A tuple (controllers, responders).
+        """
+        controllers = []
+        responders = []
+
+        try:
+            async with self.__write_lock:
+                read_command_code = CommandCode.get_first_all_link_record
+
+                while True:
+                    with self.read(
+                        command_codes=[
+                            read_command_code,
+                            CommandCode.all_link_record_response,
+                        ],
+                    ) as queue:
+                        self.write(read_command_code)
+                        response = await queue.get()
+                        check_ack_or_nak(response)
+
+                        response = await queue.get()
+                        record = parse_all_link_record_response(response.body)
+
+                        if record.role == AllLinkRole.controller:
+                            controllers.append(record)
+                        else:
+                            responders.append(record)
+
+                        read_command_code = \
+                            CommandCode.get_next_all_link_record
+        except CommandFailure:
+            # A NAK is generated to signal the end of the records.
+            pass
+
+        return sorted(controllers), sorted(responders)
 
     # Private methods below.
 
