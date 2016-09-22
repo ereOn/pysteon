@@ -78,6 +78,8 @@ BODY_SIZES = {
     CommandCode.get_im_info: 7,
     CommandCode.get_first_all_link_record: 1,
     CommandCode.get_next_all_link_record: 1,
+    CommandCode.start_all_linking: 3,
+    CommandCode.cancel_all_linking: 1,
 }
 
 

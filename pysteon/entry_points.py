@@ -11,6 +11,7 @@ import os
 from chromalog.mark.helpers.simple import important
 
 from .plm import PowerLineModem
+from .objects import AllLinkMode
 from .log import logger
 
 
@@ -108,6 +109,15 @@ def info(ctx):
 
             for responder in responders:
                 logger.info("%s", responder)
+
+        async def foo():
+            #async with plm.all_linking_session(
+            #    group=0x01,
+            #    mode=AllLinkMode.delete,
+            #):
+            await asyncio.sleep(10)
+
+        loop.run_until_complete(foo())
 
     except Exception as ex:
         if debug:

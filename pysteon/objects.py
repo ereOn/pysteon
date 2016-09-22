@@ -384,6 +384,26 @@ class AllLinkRole(Enum):
             return 'responder'
 
 
+class AllLinkMode(IntEnum):
+    responder = 0x00
+    controller = 0x01
+    auto = 0x03
+    unknown = 0xfe
+    delete = 0xff
+
+    def __str__(self):
+        if self is AllLinkMode.responder:
+            return 'responder'
+        elif self is AllLinkMode.controller:
+            return 'controller'
+        elif self is AllLinkMode.auto:
+            return 'auto'
+        elif self is AllLinkMode.unknown:
+            return 'unknown'
+        else:
+            return 'delete'
+
+
 class AllLinkRecord(
     namedtuple(
         '_AllLinkRecord',

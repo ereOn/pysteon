@@ -28,6 +28,7 @@ from .messaging import (
     parse_messages,
 )
 from .objects import (
+    AllLinkMode,
     AllLinkRole,
     Identity,
     parse_all_link_record_response,
@@ -188,6 +189,68 @@ class PowerLineModem(object):
             pass
 
         return sorted(controllers), sorted(responders)
+
+    async def start_all_linking_session(self, group, mode=AllLinkMode.auto):
+        """
+        Start an all-linking session.
+
+        :param group: The group to start the session for.
+        :param mode: The mode to start the session as.
+        """
+        async with self.__write_lock:
+            with self.read(
+                command_codes=[CommandCode.start_all_linking],
+            ) as queue:
+                self.write(
+                    CommandCode.start_all_linking,
+                    bytes([mode.value, group]),
+                )
+                response = await queue.get()
+                check_ack_or_nak(response)
+                logger.debug(
+                    "%s started all-linking session for group %s "
+                    "in '%s' mode.",
+                    self,
+                    '%02x' % group,
+                    mode,
+                )
+
+    async def cancel_all_linking_session(self):
+        """
+        Cancel an all-linking session.
+        """
+        async with self.__write_lock:
+            with self.read(
+                command_codes=[CommandCode.cancel_all_linking],
+            ) as queue:
+                self.write(CommandCode.cancel_all_linking)
+                response = await queue.get()
+                check_ack_or_nak(response)
+                logger.debug("%s cancelled all-linking session", self)
+
+    def all_linking_session(self, group, mode=AllLinkMode.auto):
+        """
+        An async context manager to start then cancel an all-linking session.
+
+        :param group: The group to start the session for.
+        :param mode: The mode to start the session as.
+        """
+        class AsyncContextManager(object):
+            def __init__(self, plm, group, mode):
+                self.plm = plm
+                self.group = group
+                self.mode = mode
+
+            async def __aenter__(self):
+                return await self.plm.start_all_linking_session(
+                    group=self.group,
+                    mode=self.mode,
+                )
+
+            async def __aexit__(self, *args):
+                await self.plm.cancel_all_linking_session()
+
+        return AsyncContextManager(plm=self, group=group, mode=mode)
 
     # Private methods below.
 
