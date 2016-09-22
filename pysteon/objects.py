@@ -276,7 +276,7 @@ class NetworkBridgesSubcategory(IntEnum):
     icon_powerlinc_serial = 0x03
     icon_powerlinc_usb = 0x04
     smartlabs_power_line_modem_serial = 0x05
-    powerlinc_dual_band_serial = 0x14  # This may be wrong.
+    powerlinc_dual_band_serial = 0x11
     powerlinc_dual_band_usb = 0x15
 
     @property
