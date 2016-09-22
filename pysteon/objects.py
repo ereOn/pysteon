@@ -374,8 +374,8 @@ def parse_all_link_record_response(value):
 
 
 class AllLinkRole(Enum):
-    responder = False
-    controller = True
+    responder = True
+    controller = False
 
     def __str__(self):
         if self is AllLinkRole.controller:
