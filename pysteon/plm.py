@@ -68,6 +68,7 @@ class PowerLineModem(object):
         self.__thread.daemon = True
         self.__thread.start()
         self.__write_lock = asyncio.Lock(loop=self.loop)
+        self.__monitor_interrupt = asyncio.Event(loop=self.loop)
 
         logger.debug("Querying PLM's information...")
         (
@@ -252,8 +253,14 @@ class PowerLineModem(object):
 
         return AsyncContextManager(plm=self, group=group, mode=mode)
 
+    def interrupt(self):
+        self.__monitor_interrupt.set()
+        logger.debug("Monitoring interrupted.")
+
     async def monitor(self):
-        pass
+        self.__monitor_interrupt.clear()
+
+        await self.__monitor_interrupt.wait()
 
     # Private methods below.
 

@@ -7,6 +7,7 @@ import chromalog
 import click
 import logging
 import os
+import signal
 
 from chromalog.mark.helpers.simple import important
 
@@ -132,9 +133,12 @@ def monitor(ctx):
             important(plm),
         )
 
+        loop.add_signal_handler(signal.SIGINT, plm.interrupt)
+
         try:
             loop.run_until_complete(plm.monitor())
         finally:
+            loop.remove_signal_handler(signal.SIGINT)
             logger.info(
                 "No longer monitoring %s.",
                 important(plm),
