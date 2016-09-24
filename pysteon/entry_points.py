@@ -110,14 +110,35 @@ def info(ctx):
             for responder in responders:
                 logger.info("%s", responder)
 
-        async def foo():
-            #async with plm.all_linking_session(
-            #    group=0x01,
-            #    mode=AllLinkMode.delete,
-            #):
-            await asyncio.sleep(10)
-
         loop.run_until_complete(foo())
+
+    except Exception as ex:
+        if debug:
+            logger.exception("Unexpected error.")
+        else:
+            logger.error("Unexpected error: %s.", ex)
+
+
+@pysteon.command()
+@click.pass_context
+def monitor(ctx):
+    debug = ctx.obj['debug']
+    loop = ctx.obj['loop']
+    plm = ctx.obj['plm']
+
+    try:
+        logger.info(
+            "Monitoring %s...",
+            important(plm),
+        )
+
+        try:
+            loop.run_until_complete(plm.monitor())
+        finally:
+            logger.info(
+                "No longer monitoring %s.",
+                important(plm),
+            )
 
     except Exception as ex:
         if debug:

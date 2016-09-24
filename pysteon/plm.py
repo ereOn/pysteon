@@ -80,7 +80,7 @@ class PowerLineModem(object):
     def __str__(self):
         return (
             "{self.device_subcategory.title} ({self.identity}, firmware "
-            "version: {self.firmware_version})"
+            "version: {self.firmware_version}, {self.serial_port_url})"
         ).format(self=self)
 
     def close(self):
@@ -251,6 +251,9 @@ class PowerLineModem(object):
                 await self.plm.cancel_all_linking_session()
 
         return AsyncContextManager(plm=self, group=group, mode=mode)
+
+    async def monitor(self):
+        pass
 
     # Private methods below.
 
