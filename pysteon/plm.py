@@ -31,6 +31,7 @@ from .objects import (
     AllLinkMode,
     AllLinkRole,
     Identity,
+    InsteonMessage,
     parse_all_link_record_response,
     parse_device_categories,
 )
@@ -48,8 +49,10 @@ class PowerLineModem(object):
         self.serial_port_url = serial_port_url
         self.loop = loop or asyncio.get_event_loop()
         self.on_message = Signal()
+        self.on_insteon_message = Signal()
 
         self.on_message.connect(partial(logger.debug, "%s"))
+        self.on_insteon_message.connect(partial(logger.debug, "%s"))
 
         if on_message:
             self.on_message.connect(on_message)
@@ -85,6 +88,7 @@ class PowerLineModem(object):
         ).format(self=self)
 
     def close(self):
+        self.interrupt()
         self.__must_stop.set()
         self.__thread.join()
         self.__thread = None
@@ -254,13 +258,19 @@ class PowerLineModem(object):
         return AsyncContextManager(plm=self, group=group, mode=mode)
 
     def interrupt(self):
-        self.__monitor_interrupt.set()
-        logger.debug("Monitoring interrupted.")
+        if not self.__monitor_interrupt.is_set():
+            self.__monitor_interrupt.set()
+            logger.debug("Monitoring interrupted.")
 
     async def monitor(self):
         self.__monitor_interrupt.clear()
 
-        await self.__monitor_interrupt.wait()
+        self.on_message.connect(self._monitor_message)
+
+        try:
+            await self.__monitor_interrupt.wait()
+        finally:
+            self.on_message.disconnect(self._monitor_message)
 
     # Private methods below.
 
@@ -290,3 +300,14 @@ class PowerLineModem(object):
                             self.on_message.emit,
                             message,
                         )
+
+    def _monitor_message(self, message):
+        # We only care about Insteon messages.
+        if message.command_code not in {
+            CommandCode.standard_message_received,
+            CommandCode.extended_message_received,
+        }:
+            return
+
+        insteon_message = InsteonMessage.from_message(message)
+        self.on_insteon_message.emit(insteon_message)

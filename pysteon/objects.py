@@ -422,3 +422,57 @@ class AllLinkRecord(
             self.role,
             self.data.hex(),
         )
+
+
+class InsteonMessageFlag(IntEnum):
+    extended = 4
+    ack = 5
+    all_link = 6
+    broadcast = 7
+
+
+class InsteonMessage(
+    namedtuple(
+        '_InsteonMessage',
+        [
+            'sender',
+            'target',
+            'hops_left',
+            'max_hops',
+            'flags',
+            'command_bytes',
+            'user_data',
+        ],
+    ),
+):
+    @classmethod
+    def from_message(cls, message):
+        flags_byte = message.body[6]
+        max_hops = flags_byte & 0x03
+        hops_left = (flags_byte & 0x0c) >> 2
+        flags = {
+            flag for flag in InsteonMessageFlag
+            if (flags_byte & (1 << flag.value)) != 0
+        }
+
+        return cls(
+            sender=Identity(message.body[0:3]),
+            target=Identity(message.body[3:6]),
+            hops_left=hops_left,
+            max_hops=max_hops,
+            flags=flags,
+            command_bytes=message.body[7:9],
+            user_data=message.body[9:],
+        )
+
+    def __str__(self):
+        return (
+            "{self.sender} -> {self.target} "
+            "[{self.hops_left}/{self.max_hops}]: {command_bytes} ({flags}) "
+            "({user_data})"
+        ).format(
+            self=self,
+            command_bytes=self.command_bytes.hex(),
+            flags=', '.join(flag.name for flag in self.flags),
+            user_data=self.user_data.hex(),
+        )
