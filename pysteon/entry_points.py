@@ -9,8 +9,12 @@ import logging
 import os
 import signal
 
-from chromalog.mark.helpers.simple import important
+from chromalog.mark.helpers.simple import (
+    important,
+    error,
+)
 
+from .database import Database
 from .plm import PowerLineModem
 from .objects import AllLinkMode
 from .log import logger
@@ -43,10 +47,37 @@ def _setup_logging(debug):
     '--serial-port-url',
     default=os.environ.get('PYSTEON_SERIAL_PORT_URL', '/dev/ttyUSB0'),
 )
+@click.option(
+    '-r',
+    '--root',
+    default=os.environ.get(
+        'PYSTEON_ROOT',
+        os.path.expanduser('~/.pysteon'),
+    ),
+    type=click.Path(file_okay=False, writable=True),
+)
 @click.pass_context
-def pysteon(ctx, debug, serial_port_url):
+def pysteon(ctx, debug, serial_port_url, root):
     _setup_logging(debug=debug)
     ctx.obj = {'debug': debug}
+
+    logger.debug("Using configuration root at: %s.", important(root))
+
+    # Make sure the root directory exists.
+    os.makedirs(root, exist_ok=True)
+
+    database_path = os.path.join(root, 'database.yml')
+
+    try:
+        with open(database_path) as database_file:
+            logger.debug("Loading database at %s.", important(database_path))
+            database = Database.load_from_stream(database_file)
+    except OSError:
+        logger.debug(
+            "No database found at %s. A default one will be used.",
+            important(database_path),
+        )
+        database = Database()
 
     logger.debug(
         "Connecting with PowerLine Modem on serial port: %s. Please wait...",
@@ -64,6 +95,17 @@ def pysteon(ctx, debug, serial_port_url):
         logger.debug("Closing %s. Please wait...", important(str(plm)))
         plm.close()
         logger.debug("Closed %s.", important(str(plm)))
+        logger.debug("Saving database at %s.", important(database_path))
+
+        try:
+            with open(database_path, 'w') as database_file:
+                database.save_to_stream(database_file)
+        except OSError as ex:
+            logger.warning(
+                "Could not save updated database to %s ! Error was: %s",
+                important(database_path),
+                error(str(ex)),
+            )
 
     logger.debug(
         "Connected with: %s.",
@@ -110,8 +152,6 @@ def info(ctx):
 
             for responder in responders:
                 logger.info("%s", responder)
-
-        loop.run_until_complete(foo())
 
     except Exception as ex:
         if debug:

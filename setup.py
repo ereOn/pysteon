@@ -23,6 +23,7 @@ pysteon is a library and a set of CLI that controls Insteon devices.
         'click>=6.6,<7',
         'pyserial>=3.1.1,<4',
         'pyslot>=2.0.1,<3',
+        'pyyaml>=3.12,<4',
     ],
     test_suite='tests',
     classifiers=[
