@@ -34,7 +34,26 @@ def _setup_logging(debug):
         )
 
 
-@click.group()
+class AllLinkModeType(click.ParamType):
+    name = "All-link mode"
+    def convert(self, value, param, ctx):
+        try:
+            return AllLinkMode.from_string(value)
+        except ValueError:
+            raise click.BadParameter(
+                message="%s. Can be: %s" % (
+                    value,
+                    ', '.join(map(str, AllLinkMode)),
+                ),
+                ctx=ctx,
+                param=param,
+            )
+
+
+@click.group(
+    help="pysteon is a command-line interface (CLI) for managing and "
+    "monitoring your Insteon network through a PLM device.",
+)
 @click.option(
     '-d',
     '--debug',
@@ -46,6 +65,7 @@ def _setup_logging(debug):
     '-s',
     '--serial-port-url',
     default=os.environ.get('PYSTEON_SERIAL_PORT_URL', '/dev/ttyUSB0'),
+    help="The serial port URL through which the PLM is exposed.",
 )
 @click.option(
     '-r',
@@ -55,6 +75,7 @@ def _setup_logging(debug):
         os.path.expanduser('~/.pysteon'),
     ),
     type=click.Path(file_okay=False, writable=True),
+    help="The root path for all the configuration and database files.",
 )
 @click.pass_context
 def pysteon(ctx, debug, serial_port_url, root):
@@ -113,7 +134,7 @@ def pysteon(ctx, debug, serial_port_url, root):
     )
 
 
-@pysteon.command()
+@pysteon.command(help="Show information about the PLM.")
 @click.pass_context
 def info(ctx):
     debug = ctx.obj['debug']
@@ -160,7 +181,7 @@ def info(ctx):
             logger.error("Unexpected error: %s.", ex)
 
 
-@pysteon.command()
+@pysteon.command(help="Monitor the PLM for Insteon events.")
 @click.pass_context
 def monitor(ctx):
     debug = ctx.obj['debug']
@@ -189,3 +210,66 @@ def monitor(ctx):
             logger.exception("Unexpected error.")
         else:
             logger.error("Unexpected error: %s.", ex)
+
+
+@pysteon.command(
+    help="Associate the PLM with a new Insteon device (all-link).",
+)
+@click.option(
+    '-g',
+    '--group',
+    default=0xff,
+    type=click.IntRange(min=0x00, max=0xff),
+    help="The group number to use during all-linking.",
+)
+@click.option(
+    '-m',
+    '--mode',
+    default="auto",
+    type=AllLinkModeType(),
+    help="The All-link mode that the PLM uses.",
+)
+@click.option(
+    '-t',
+    '--timeout',
+    default=30,
+    help="The time to wait for a device to link, in seconds.",
+)
+@click.pass_context
+def link(ctx, group, mode, timeout):
+    debug = ctx.obj['debug']
+    loop = ctx.obj['loop']
+    plm = ctx.obj['plm']
+
+    try:
+        logger.info(
+            "Starting all-linking process on %s for group %s in mode '%s'...",
+            important(plm),
+            important(hex(group)),
+            important(mode),
+        )
+
+        async def all_link(plm):
+            async with plm.all_linking_session(group=group, mode=mode):
+                logger.info(
+                    "Waiting for a maximum of %s second(s)...",
+                    timeout,
+                )
+                # TODO: Implement.
+                pass
+
+        loop.add_signal_handler(signal.SIGINT, plm.interrupt)
+
+        try:
+            loop.run_until_complete(all_link(plm))
+        finally:
+            loop.remove_signal_handler(signal.SIGINT)
+
+    except Exception as ex:
+        if debug:
+            logger.exception("Unexpected error.")
+        else:
+            logger.error("Unexpected error: %s.", ex)
+
+    finally:
+        logger.info("All-linking process completed.")

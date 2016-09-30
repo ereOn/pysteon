@@ -5,6 +5,7 @@ Unit tests for objects.
 import pytest
 
 from pysteon.objects import (
+    AllLinkMode,
     DeviceCategory,
     DimmableLightingControlSubcategory,
     GenericDeviceCategory,
@@ -87,3 +88,20 @@ def test_device_categories():
     assert subcat == \
         DimmableLightingControlSubcategory.switchlinc_v2_dimmer_600w
     assert subcat.title == "SwitchLinc V2 Dimmer 600W [2476D]"
+
+
+def test_all_link_mode_from_string():
+    assert AllLinkMode.from_string("responder") == AllLinkMode.responder
+
+
+def test_all_link_mode_from_string_non_existing():
+    with pytest.raises(ValueError):
+        AllLinkMode.from_string("foo")
+
+
+def test_all_link_mode_to_string():
+    assert str(AllLinkMode.auto) == "auto"
+    assert str(AllLinkMode.controller) == "controller"
+    assert str(AllLinkMode.delete) == "delete"
+    assert str(AllLinkMode.responder) == "responder"
+    assert str(AllLinkMode.unknown) == "unknown"

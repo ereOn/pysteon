@@ -391,17 +391,15 @@ class AllLinkMode(IntEnum):
     unknown = 0xfe
     delete = 0xff
 
+    @classmethod
+    def from_string(cls, value):
+        try:
+            return getattr(cls, value)
+        except AttributeError:
+            raise ValueError(value)
+
     def __str__(self):
-        if self is AllLinkMode.responder:
-            return 'responder'
-        elif self is AllLinkMode.controller:
-            return 'controller'
-        elif self is AllLinkMode.auto:
-            return 'auto'
-        elif self is AllLinkMode.unknown:
-            return 'unknown'
-        else:
-            return 'delete'
+        return self.name
 
 
 class AllLinkRecord(

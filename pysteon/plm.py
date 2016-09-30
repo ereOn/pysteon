@@ -216,7 +216,7 @@ class PowerLineModem(object):
                     "%s started all-linking session for group %s "
                     "in '%s' mode.",
                     self,
-                    '%02x' % group,
+                    hex(group),
                     mode,
                 )
 
