@@ -272,6 +272,25 @@ class PowerLineModem(object):
         finally:
             self.on_message.disconnect(self._monitor_message)
 
+    async def wait_all_linking_completed(self):
+        """
+        Wait for an all-linking completed event.
+
+        :returns: The all-link mode, the all-link group, the device identifier,
+            the device category and sub-category.
+        """
+        with self.read(
+            command_codes=[CommandCode.all_linking_completed],
+        ) as queue:
+            response = await queue.get()
+            mode = AllLinkMode(response.body[0])
+            group = response.body[1]
+            identifier = Identity(response.body[2:5])
+            category, subcategory = parse_device_categories(response.body[5:7])
+
+            print(mode, group, identifier, category, subcategory)
+            return mode, group, identifier, category, subcategory
+
     # Private methods below.
 
     def _flush(self):

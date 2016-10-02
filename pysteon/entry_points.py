@@ -252,11 +252,26 @@ def link(ctx, group, mode, timeout):
         async def all_link(plm):
             async with plm.all_linking_session(group=group, mode=mode):
                 logger.info(
-                    "Waiting for a maximum of %s second(s)...",
+                    "Waiting for a device to be all-linked for a maximum of %s"
+                    " second(s)...",
                     timeout,
                 )
-                # TODO: Implement.
-                pass
+                loop.add_signal_handler(signal.SIGINT, plm.interrupt)
+
+                try:
+                    done, pending = await asyncio.wait(
+                        [
+                            plm.wait_all_linking_completed(),
+                            asyncio.sleep(timeout),
+                        ],
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+
+                    for task in pending:
+                        task.cancel()
+                finally:
+                    loop.remove_signal_handler(signal.SIGINT)
+
 
         loop.add_signal_handler(signal.SIGINT, plm.interrupt)
 

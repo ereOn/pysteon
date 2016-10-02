@@ -44,7 +44,19 @@ def parse_device_categories(value):
     return devcat, subcat
 
 
-class DeviceCategory(IntEnum):
+class TitleIntEnum(IntEnum):
+    """
+    A base class for IntEnum with titles.
+    """
+
+    def __repr__(self):
+        return '%s(0x%02x)' % (self.__class__.__name__, self.value)
+
+    def __str__(self):
+        return self.title
+
+
+class DeviceCategory(TitleIntEnum):
     """
     All the device categories, as defined at:
     http://cache.insteon.com/pdf/INSTEON_Developers_Guide_20070816a.pdf, page
@@ -176,9 +188,15 @@ class DeviceCategory(IntEnum):
 class GenericDeviceCategory(object):
     def __init__(self, value):
         self.value = value
-        self.title = "Unknown device category (%02x)" % self.value
+        self.title = "Unknown device category (0x%02x)" % self.value
         self.examples = ""
         self.subcategory_class = GenericSubcategory
+
+    def __repr__(self):
+        return 'GenericDeviceCategory(0x%02x)' % self.value
+
+    def __str__(self):
+        return self.title
 
     def __eq__(self, value):
         if not isinstance(value, GenericDeviceCategory):
@@ -187,7 +205,7 @@ class GenericDeviceCategory(object):
         return value.value == self.value
 
 
-class GeneralizedControllersSubcategory(IntEnum):
+class GeneralizedControllersSubcategory(TitleIntEnum):
     controlink = 0x04
     remotelinc = 0x05
     icon_tabletop_controller = 0x06
@@ -209,7 +227,7 @@ class GeneralizedControllersSubcategory(IntEnum):
         }[self]
 
 
-class DimmableLightingControlSubcategory(IntEnum):
+class DimmableLightingControlSubcategory(TitleIntEnum):
     lamplinc_v2 = 0x00
     switchlinc_v2_dimmer_600w = 0x01
     in_linelinc_dimmer = 0x02
@@ -244,7 +262,7 @@ class DimmableLightingControlSubcategory(IntEnum):
         }[self]
 
 
-class SwitchedLightingControlSubcategory(IntEnum):
+class SwitchedLightingControlSubcategory(TitleIntEnum):
     appliancelinc = 0x09
     switchlinc_relay = 0x0a
     icon_on_off_switch = 0x0b
@@ -270,7 +288,7 @@ class SwitchedLightingControlSubcategory(IntEnum):
         }[self]
 
 
-class NetworkBridgesSubcategory(IntEnum):
+class NetworkBridgesSubcategory(TitleIntEnum):
     powerlinc_serial = 0x01
     powerlinc_usb = 0x02
     icon_powerlinc_serial = 0x03
@@ -294,7 +312,7 @@ class NetworkBridgesSubcategory(IntEnum):
         }[self]
 
 
-class IrrigationControlSubcategory(IntEnum):
+class IrrigationControlSubcategory(TitleIntEnum):
     compacta_ezrain_sprinkler_controller = 0x00
 
     @property
@@ -305,7 +323,7 @@ class IrrigationControlSubcategory(IntEnum):
         }[self]
 
 
-class ClimateControlSubcategory(IntEnum):
+class ClimateControlSubcategory(TitleIntEnum):
     broan_smsc080_exhaust_fan = 0x00
     compacta_eztherm = 0x01
     broan_smsc110_exhaust_fan = 0x02
@@ -323,7 +341,7 @@ class ClimateControlSubcategory(IntEnum):
         }[self]
 
 
-class PoolAndSpaControlSubcategory(IntEnum):
+class PoolAndSpaControlSubcategory(TitleIntEnum):
     compacta_ezpool = 0x00
 
     @property
@@ -333,7 +351,7 @@ class PoolAndSpaControlSubcategory(IntEnum):
         }[self]
 
 
-class SensorsAndActuatorsSubcategory(IntEnum):
+class SensorsAndActuatorsSubcategory(TitleIntEnum):
     iolinc = 0x00
 
     @property
@@ -347,6 +365,12 @@ class GenericSubcategory(object):
     def __init__(self, value):
         self.value = value
         self.title = "Unknown subcategory (%02x)" % self.value
+
+    def __repr__(self):
+        return 'GenericSubcategory(0x%02x)' % self.value
+
+    def __str__(self):
+        return self.title
 
     def __eq__(self, value):
         if not isinstance(value, GenericSubcategory):
