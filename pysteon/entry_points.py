@@ -256,19 +256,15 @@ def link(ctx, group, mode, timeout):
                     " second(s)...",
                     timeout,
                 )
-                loop.add_signal_handler(signal.SIGINT, plm.interrupt)
+                future = plm.wait_all_linking_completed()
+                loop.add_signal_handler(signal.SIGINT, future.cancel)
 
                 try:
-                    done, pending = await asyncio.wait(
-                        [
-                            plm.wait_all_linking_completed(),
-                            asyncio.sleep(timeout),
-                        ],
-                        return_when=asyncio.FIRST_COMPLETED,
+                    await future
+                except asyncio.CancelledError:
+                    logger.warning(
+                        "All linking was cancelled before completion.",
                     )
-
-                    for task in pending:
-                        task.cancel()
                 finally:
                     loop.remove_signal_handler(signal.SIGINT)
 

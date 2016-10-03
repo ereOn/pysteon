@@ -52,6 +52,7 @@ class PowerLineModem(object):
         self.on_insteon_message = Signal()
 
         self.on_message.connect(partial(logger.debug, "%s"))
+        self.on_message.connect(self._handle_message)
         self.on_insteon_message.connect(partial(logger.debug, "%s"))
 
         if on_message:
@@ -80,6 +81,11 @@ class PowerLineModem(object):
             self.device_subcategory,
             self.firmware_version,
         ) = self.loop.run_until_complete(self.get_info())
+
+        self.on_all_linking_completed = Signal()
+        self.on_all_linking_completed.connect(
+            self._handle_all_linking_completed,
+        )
 
     def __str__(self):
         return (
@@ -272,24 +278,24 @@ class PowerLineModem(object):
         finally:
             self.on_message.disconnect(self._monitor_message)
 
-    async def wait_all_linking_completed(self):
+    def wait_all_linking_completed(self):
         """
         Wait for an all-linking completed event.
-
-        :returns: The all-link mode, the all-link group, the device identifier,
-            the device category and sub-category.
         """
-        with self.read(
-            command_codes=[CommandCode.all_linking_completed],
-        ) as queue:
-            response = await queue.get()
-            mode = AllLinkMode(response.body[0])
-            group = response.body[1]
-            identifier = Identity(response.body[2:5])
-            category, subcategory = parse_device_categories(response.body[5:7])
+        future = asyncio.Future(loop=self.loop)
 
-            print(mode, group, identifier, category, subcategory)
-            return mode, group, identifier, category, subcategory
+        def handler_func(future, *args, **kwargs):
+            future.set_result(None)
+
+        handler = partial(handler_func, future)
+
+        @future.add_done_callback
+        def on_done(f):
+            self.on_all_linking_completed.disconnect(handler)
+
+        self.on_all_linking_completed.connect(handler)
+
+        return future
 
     # Private methods below.
 
@@ -320,6 +326,29 @@ class PowerLineModem(object):
                             message,
                         )
 
+    def _handle_message(self, message):
+        if message.command_code == CommandCode.all_linking_completed:
+            try:
+                mode = AllLinkMode(message.body[0])
+            except ValueError:
+                mode = None
+
+            group = message.body[1]
+            identity = Identity(message.body[2:5])
+            category, subcategory = parse_device_categories(
+                message.body[5:7],
+            )
+            firmware_version = message.body[7]
+
+            self.on_all_linking_completed.emit(
+                identity=identity,
+                group=group,
+                mode=mode,
+                category=category,
+                subcategory=subcategory,
+                firmware_version=firmware_version,
+            )
+
     def _monitor_message(self, message):
         # We only care about Insteon messages.
         if message.command_code not in {
@@ -330,3 +359,29 @@ class PowerLineModem(object):
 
         insteon_message = InsteonMessage.from_message(message)
         self.on_insteon_message.emit(insteon_message)
+
+    def _handle_all_linking_completed(
+        self,
+        identity,
+        group,
+        mode,
+        category,
+        subcategory,
+        firmware_version,
+    ):
+        if mode is None:
+            logger.debug(
+                "All linking deletion failed with device %s-%s (%s) as no "
+                "existing entry was found.",
+                identity,
+                '%02x' % group,
+                subcategory,
+            )
+        else:
+            logger.debug(
+                "All linking with device %s-%s (%s) in mode %s is complete.",
+                identity,
+                '%02x' % group,
+                subcategory,
+                mode,
+            )

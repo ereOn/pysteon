@@ -213,6 +213,7 @@ class GeneralizedControllersSubcategory(TitleIntEnum):
     balboa_instruments_poolux_lcd_controller = 0x0a
     access_point = 0x0b
     ies_color_touchscreen = 0x0c
+    remote_control_keypad_4_scene = 0x1b
 
     @property
     def title(self):
@@ -224,6 +225,8 @@ class GeneralizedControllersSubcategory(TitleIntEnum):
             "Balboa Instruments Poolux LCD Controller",
             self.access_point: "Access Point",
             self.ies_color_touchscreen: "IES Color Touchscreen",
+            self.remote_control_keypad_4_scene:
+            "Remote Control Keypad 4 scene [2342]",
         }[self]
 
 
@@ -412,7 +415,6 @@ class AllLinkMode(IntEnum):
     responder = 0x00
     controller = 0x01
     auto = 0x03
-    unknown = 0xfe
     delete = 0xff
 
     @classmethod
