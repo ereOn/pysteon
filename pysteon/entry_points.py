@@ -105,6 +105,7 @@ def pysteon(ctx, debug, serial_port_url, root):
         important(serial_port_url),
     )
 
+    ctx.obj['database'] = database
     loop = ctx.obj['loop'] = asyncio.get_event_loop()
     plm = ctx.obj['plm'] = PowerLineModem(
         serial_port_url=serial_port_url,
@@ -235,8 +236,20 @@ def monitor(ctx):
     default=30,
     help="The time to wait for a device to link, in seconds.",
 )
+@click.option(
+    '-a',
+    '--alias',
+    default=None,
+    help="An alias to associate to the device in case of an association.",
+)
+@click.option(
+    '-d',
+    '--description',
+    default=None,
+    help="A description to associate to the device.",
+)
 @click.pass_context
-def link(ctx, group, mode, timeout):
+def link(ctx, group, mode, timeout, alias, description):
     debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
@@ -260,14 +273,30 @@ def link(ctx, group, mode, timeout):
                 loop.add_signal_handler(signal.SIGINT, future.cancel)
 
                 try:
-                    await future
+                    all_link_info = await future
                 except asyncio.CancelledError:
                     logger.warning(
                         "All linking was cancelled before completion.",
                     )
+                    return
                 finally:
                     loop.remove_signal_handler(signal.SIGINT)
 
+                kwargs = {}
+
+                if alias is not None:
+                    kwargs['alias'] = alias
+
+                if description is not None:
+                    kwargs['description'] = description
+
+                database.set_device(
+                    identity=all_link_info['identity'],
+                    categories=(
+                        all_link_info['category'],
+                        all_link_info['subcategory'],
+                    ),
+                )
 
         loop.add_signal_handler(signal.SIGINT, plm.interrupt)
 

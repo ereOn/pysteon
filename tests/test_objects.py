@@ -15,11 +15,26 @@ from pysteon.objects import (
 )
 
 
+def test_identity_parse():
+    assert Identity.from_string('aB.cD.04') == Identity(b'\xab\xcd\x04')
+
+
+def test_identity_parse_invalid():
+    with pytest.raises(ValueError):
+        Identity.from_string('aB.cD')
+
+    with pytest.raises(ValueError):
+        Identity.from_string('aB.cD.ge')
+
+    with pytest.raises(ValueError):
+        Identity.from_string('ffffff')
+
+
 def test_identity_invalid_id():
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         Identity(b'')
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         Identity(b'\x01\x02\x03\x04')
 
 
@@ -104,4 +119,3 @@ def test_all_link_mode_to_string():
     assert str(AllLinkMode.controller) == "controller"
     assert str(AllLinkMode.delete) == "delete"
     assert str(AllLinkMode.responder) == "responder"
-    assert str(AllLinkMode.unknown) == "unknown"

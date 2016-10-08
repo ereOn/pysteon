@@ -284,8 +284,23 @@ class PowerLineModem(object):
         """
         future = asyncio.Future(loop=self.loop)
 
-        def handler_func(future, *args, **kwargs):
-            future.set_result(None)
+        def handler_func(
+            future,
+            identity,
+            group,
+            mode,
+            category,
+            subcategory,
+            firmware_version,
+        ):
+            future.set_result({
+                'identity': identity,
+                'group': group,
+                'mode': mode,
+                'category': category,
+                'subcategory': subcategory,
+                'firmware_version': firmware_version,
+            })
 
         handler = partial(handler_func, future)
 

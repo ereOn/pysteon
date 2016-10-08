@@ -14,8 +14,14 @@ class Identity(bytes):
     Represents an identity.
     """
 
+    @classmethod
+    def from_string(cls, value):
+        return cls(bytes([int(x, 16) for x in value.split('.')]))
+
     def __new__(cls, id_):
-        assert len(id_) == 3
+        if (len(id_) != 3):
+            raise ValueError(id_)
+
         return super().__new__(cls, id_)
 
     def __str__(self):
