@@ -243,6 +243,7 @@ class DimmableLightingControlSubcategory(TitleIntEnum):
     socketlinc = 0x0d
     icon_switchlinc_dimmer_for_lixer_bell_canada = 0x13
     togglelinc_dimmer = 0x17
+    switchlinc_v2_dimmer_600w_2477 = 0x20
 
     @property
     def title(self):
@@ -262,6 +263,8 @@ class DimmableLightingControlSubcategory(TitleIntEnum):
             self.icon_switchlinc_dimmer_for_lixer_bell_canada:
             "Icon SwitchLinc Dimmer for Lixar/Bell Canada [2676D-B]",
             self.togglelinc_dimmer: "ToggleLinc Dimmer [2466D]",
+            self.switchlinc_v2_dimmer_600w_2477:
+            "SwitchLinc V2 Dimmer 600W [2477D]",
         }[self]
 
 
