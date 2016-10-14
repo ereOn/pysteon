@@ -2,13 +2,10 @@
 Database utilities.
 """
 
-import yaml
+import sqlite3
 
-from voluptuous import (
-    Optional,
-    Required,
-    Schema,
-)
+from collections import namedtuple
+from itertools import chain
 
 from pysteon.objects import (
     Identity,
@@ -16,56 +13,90 @@ from pysteon.objects import (
 )
 
 
-def _read_categories(value):
-    values = Schema((int, int))(value)
-    return parse_device_categories(bytes(values))
+class DatabaseDevice(namedtuple('_DatabaseDevice', (
+    'identity',
+    'alias',
+    'description',
+    'category',
+    'subcategory',
+    'firmware_version',
+))):
+    @classmethod
+    def from_row(cls, row):
+        category, subcategory = parse_device_categories(bytes(row[3:5]))
 
+        return cls(
+            identity=Identity.from_string(row[0]),
+            alias=row[1],
+            description=row[2],
+            category=category,
+            subcategory=subcategory,
+            firmware_version=row[5],
+        )
 
-def _write_categories(value):
-    return [cat.value for cat in value]
+    def to_row(self):
+        return (
+            str(self.identity),
+            self.alias,
+            self.description,
+            self.category.value,
+            self.subcategory.value,
+            self.firmware_version,
+        )
+
+    def __str__(self):
+        return '%s (%s)' % (
+            self.alias if self.alias else self.identity,
+            self.description if self.description else self.subcategory,
+        )
 
 
 class Database(object):
-    READ_SCHEMA = Schema({
-        Required('devices', default=dict): {
-            Identity.from_string: Schema({
-                Required('categories'): _read_categories,
-                Required('firmware_version'): int,
-                Required('alias', default=''): str,
-                Required('description', default=''): str,
-            })
-        },
-    })
-    WRITE_SCHEMA = Schema({
-        Required('devices'): {
-            Identity.__str__: Schema({
-                Required('categories'): _write_categories,
-                Required('firmware_version'): int,
-                Optional('alias'): str,
-                Optional('description'): str,
-            })
-        },
-    })
+    DATABASE_FIELDS = (
+        ('identity', 'TEXT'),
+        ('alias', 'TEXT'),
+        ('description', 'TEXT'),
+        ('category', 'INTEGER'),
+        ('subcategory', 'INTEGER'),
+        ('firmware_version', 'INTEGER'),
+    )
+    DATABASE_UNIQUE_FIELDS = ('identity',)
 
     @classmethod
-    def load_from_stream(cls, fs):
-        data = yaml.load(fs)
-        return cls(data)
+    def load_from_file(cls, path):
+        db = sqlite3.connect(path)
+        db.execute(
+            'CREATE TABLE IF NOT EXISTS devices (%s)' % ', '.join(
+                chain(
+                    (' '.join(f) for f in cls.DATABASE_FIELDS),
+                    (
+                        'UNIQUE(%s)' % ', '.join(cls.DATABASE_UNIQUE_FIELDS),
+                    ),
+                ),
+            )
+        )
+        return cls(db)
 
-    def __init__(self, data=None):
-        self._data = self.READ_SCHEMA(data or {})
+    def __init__(self, db=None):
+        self._db = db
 
-    def save_to_stream(self, fs):
-        yaml.dump(self.WRITE_SCHEMA(self._data), fs)
+    def close(self):
+        self._db.close()
+        self._db = None
 
     def get_device(self, identity):
-        return self._data['devices'].get(identity)
+        return next(map(DatabaseDevice.from_row, self._db.execute(
+            'SELECT * FROM devices WHERE (identity = ?)',
+            [
+                str(identity),
+            ],
+        )), None)
 
-    def set_device(
-        self,
-        identity,
-        **kwargs
-    ):
-        info = self._data['devices'].get(identity, {})
-        info.update(kwargs)
-        self._data['devices'][identity] = info
+    def set_device(self, *args, **kwargs):
+        self._db.execute(
+            'INSERT OR REPLACE INTO devices VALUES (%s)' % ', '.join(
+                '?' * len(self.DATABASE_FIELDS),
+            ),
+            DatabaseDevice(*args, **kwargs).to_row(),
+        )
+        self._db.commit()

@@ -2,11 +2,10 @@
 Database tests.
 """
 
-import yaml
-
-from io import StringIO
-
-from pysteon.database import Database
+from pysteon.database import (
+    Database,
+    DatabaseDevice,
+)
 from pysteon.objects import (
     Identity,
     GenericDeviceCategory,
@@ -14,57 +13,51 @@ from pysteon.objects import (
 )
 
 
-def test_load_from_stream_empty():
-    stream = StringIO('{}')
-    Database.load_from_stream(stream)
-
-
-def test_save_to_stream_empty():
-    database = Database()
-    stream = StringIO()
-    database.save_to_stream(stream)
-    stream.seek(0)
-    assert yaml.load(stream.read()) == {
-        'devices': {},
-    }
-
-
-def test_save_to_stream_with_devices():
-    database = Database()
-    identity = Identity(b'\x01\x02\x03')
-    database.set_device(
-        identity=identity,
-        categories=(GenericDeviceCategory(0x42), GenericSubcategory(0x80)),
-        firmware_version=0x99,
-    )
-    stream = StringIO()
-    database.save_to_stream(stream)
-    stream.seek(0)
-    assert yaml.load(stream.read()) == {
-        'devices': {
-            '01.02.03': {
-                'categories': [66, 128],
-                'firmware_version': 0x99,
-            },
-        },
-    }
+def test_load_from_file():
+    Database.load_from_file(':memory:')
 
 
 def test_get_device_non_existing():
-    database = Database()
+    database = Database.load_from_file(':memory:')
     assert database.get_device(Identity(b'\x01\x02\x03')) is None
 
 
-def test_set_device_new():
-    database = Database()
+def test_set_device():
+    database = Database.load_from_file(':memory:')
     identity = Identity(b'\x01\x02\x03')
-    database.set_device(
+    database_device = DatabaseDevice(
         identity=identity,
-        categories=(GenericDeviceCategory(0x42), GenericSubcategory(0x80)),
+        alias='foo',
+        description='',
+        category=GenericDeviceCategory(0x42),
+        subcategory=GenericSubcategory(0x80),
         firmware_version=0x99,
     )
+    database.set_device(*database_device)
 
-    assert database.get_device(identity) == dict(
-        categories=(GenericDeviceCategory(0x42), GenericSubcategory(0x80)),
+    assert database.get_device(identity) == database_device
+
+
+def test_set_existing_device():
+    database = Database.load_from_file(':memory:')
+    identity = Identity(b'\x01\x02\x03')
+    database_device = DatabaseDevice(
+        identity=identity,
+        alias='foo',
+        description='',
+        category=GenericDeviceCategory(0x42),
+        subcategory=GenericSubcategory(0x80),
         firmware_version=0x99,
     )
+    database.set_device(*database_device)
+
+    database_device2 = DatabaseDevice(
+        identity=identity,
+        alias='foo',
+        description='My description',
+        category=GenericDeviceCategory(0x42),
+        subcategory=GenericSubcategory(0x80),
+        firmware_version=0x99,
+    )
+    database.set_device(*database_device2)
+    assert database.get_device(identity) == database_device2

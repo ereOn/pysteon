@@ -10,8 +10,9 @@ import os
 import signal
 
 from chromalog.mark.helpers.simple import (
-    important,
     error,
+    important,
+    success,
 )
 
 from .database import Database
@@ -97,12 +98,11 @@ def pysteon(ctx, debug, root):
     # Make sure the root directory exists.
     os.makedirs(root, exist_ok=True)
 
-    database_path = os.path.join(root, 'database.yml')
+    database_path = os.path.join(root, 'database.sqlite')
 
     try:
-        with open(database_path) as database_file:
-            logger.debug("Loading database at %s.", important(database_path))
-            database = Database.load_from_stream(database_file)
+        logger.debug("Loading database at %s.", important(database_path))
+        database = Database.load_from_file(database_path)
     except OSError:
         logger.debug(
             "No database found at %s. A default one will be used.",
@@ -114,14 +114,13 @@ def pysteon(ctx, debug, root):
 
     @ctx.call_on_close
     def close():
-        logger.debug("Saving database at %s.", important(database_path))
+        logger.debug("Closing database at %s.", important(database_path))
 
         try:
-            with open(database_path, 'w') as database_file:
-                database.save_to_stream(database_file)
+            database.close()
         except OSError as ex:
             logger.warning(
-                "Could not save updated database to %s ! Error was: %s",
+                "Could not close database to %s ! Error was: %s",
                 important(database_path),
                 error(str(ex)),
             )
@@ -197,7 +196,7 @@ def info(ctx):
                 device = database.get_device(controller.identity)
 
                 if device:
-                    logger.info("%s - %s (%s)", controller, device['alias'], device['categories'][1])
+                    logger.info("%s - %s", controller, success(device))
                 else:
                     logger.info("%s", controller)
 
@@ -315,20 +314,30 @@ def link(ctx, group, mode, timeout, alias, description):
                 finally:
                     loop.remove_signal_handler(signal.SIGINT)
 
-                kwargs = {}
-
-                if alias is not None:
-                    kwargs['alias'] = alias
-
-                if description is not None:
-                    kwargs['description'] = description
+                if all_link_info['mode'] is None:
+                    logger.warning(
+                        "All linking failed with %s-%s (%s) in mode %s.",
+                        important(all_link_info['identity']),
+                        hex(all_link_info['group']),
+                        all_link_info['subcategory'],
+                        important(mode),
+                    )
+                else:
+                    logger.info(
+                        "All linking succeeded with %s-%s (%s) in mode.",
+                        important(all_link_info['identity']),
+                        hex(all_link_info['group']),
+                        all_link_info['subcategory'],
+                        important(mode),
+                    )
 
                 database.set_device(
                     identity=all_link_info['identity'],
-                    categories=(
-                        all_link_info['category'],
-                        all_link_info['subcategory'],
-                    ),
+                    alias=alias,
+                    description=description,
+                    category=all_link_info['category'],
+                    subcategory=all_link_info['subcategory'],
+                    firmware_version=all_link_info['firmware_version'],
                 )
 
         loop.add_signal_handler(signal.SIGINT, plm.interrupt)
