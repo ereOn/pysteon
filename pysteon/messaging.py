@@ -80,6 +80,7 @@ BODY_SIZES = {
     CommandCode.get_next_all_link_record: 1,
     CommandCode.start_all_linking: 3,
     CommandCode.cancel_all_linking: 1,
+    CommandCode.send_standard_or_extended_message: 7,
 }
 
 

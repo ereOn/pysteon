@@ -3,6 +3,7 @@ Objects.
 """
 
 from collections import namedtuple
+from itertools import chain
 from enum import (
     Enum,
     IntEnum,
@@ -479,8 +480,8 @@ class InsteonMessage(
     ),
 ):
     @classmethod
-    def from_message(cls, message):
-        flags_byte = message.body[6]
+    def from_message_body(cls, body):
+        flags_byte = body[6]
         max_hops = flags_byte & 0x03
         hops_left = (flags_byte & 0x0c) >> 2
         flags = {
@@ -489,14 +490,27 @@ class InsteonMessage(
         }
 
         return cls(
-            sender=Identity(message.body[0:3]),
-            target=Identity(message.body[3:6]),
+            sender=Identity(body[0:3]),
+            target=Identity(body[3:6]),
             hops_left=hops_left,
             max_hops=max_hops,
             flags=flags,
-            command_bytes=message.body[7:9],
-            user_data=message.body[9:],
+            command_bytes=body[7:9],
+            user_data=body[9:],
         )
+
+    def to_message_body(self):
+        flags_byte = (self.max_hops & 0x03) | (self.hops_left & 0x03) << 2
+
+        for flag in self.flags:
+            flags_byte |= (1 << flag.value)
+
+        return bytes(chain(
+            self.target,
+            [flags_byte],
+            self.command_bytes,
+            self.user_data or b'',
+        ))
 
     def __str__(self):
         return (

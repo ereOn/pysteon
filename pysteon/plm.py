@@ -32,6 +32,7 @@ from .objects import (
     AllLinkRole,
     Identity,
     InsteonMessage,
+    InsteonMessageFlag,
     parse_all_link_record_response,
     parse_device_categories,
 )
@@ -312,6 +313,41 @@ class PowerLineModem(object):
 
         return future
 
+    async def send_standard_or_extended_message(self, message):
+        """
+        Send a standard or extended message to the specified device.
+
+        :param message: The Insteon message to send.
+        """
+        async with self.__write_lock:
+            with self.read(
+                command_codes=[CommandCode.send_standard_or_extended_message],
+            ) as queue:
+                self.on_insteon_message.emit(message)
+                self.write(
+                    command_code=CommandCode.send_standard_or_extended_message,
+                    body=message.to_message_body(),
+                )
+                response = await queue.get()
+
+        check_ack_or_nak(response)
+
+    async def id_request(self, identity):
+        """
+        Send an ID request to the specified device.
+
+        :param identity: The device identity.
+        """
+        await self.send_standard_or_extended_message(message=InsteonMessage(
+            sender=self.identity,
+            target=identity,
+            hops_left=2,
+            max_hops=3,
+            flags={InsteonMessageFlag.all_link},
+            command_bytes=b'\x10\x00',
+            user_data=b'',
+        ))
+
     # Private methods below.
 
     def _flush(self):
@@ -372,7 +408,7 @@ class PowerLineModem(object):
         }:
             return
 
-        insteon_message = InsteonMessage.from_message(message)
+        insteon_message = InsteonMessage.from_message_body(message.body)
         self.on_insteon_message.emit(insteon_message)
 
     def _handle_all_linking_completed(
