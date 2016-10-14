@@ -16,7 +16,10 @@ from chromalog.mark.helpers.simple import (
 
 from .database import Database
 from .plm import PowerLineModem
-from .objects import AllLinkMode
+from .objects import (
+    AllLinkMode,
+    Identity,
+)
 from .log import logger
 
 
@@ -50,6 +53,19 @@ class AllLinkModeType(click.ParamType):
             )
 
 
+class IdentityType(click.ParamType):
+    name = "Identity"
+    def convert(self, value, param, ctx):
+        try:
+            return Identity.from_string(value)
+        except ValueError:
+            raise click.BadParameter(
+                message=value,
+                ctx=ctx,
+                param=param,
+            )
+
+
 @click.group(
     help="pysteon is a command-line interface (CLI) for managing and "
     "monitoring your Insteon network through a PLM device.",
@@ -62,12 +78,6 @@ class AllLinkModeType(click.ParamType):
     help="Enabled debug output.",
 )
 @click.option(
-    '-s',
-    '--serial-port-url',
-    default=os.environ.get('PYSTEON_SERIAL_PORT_URL', '/dev/ttyUSB0'),
-    help="The serial port URL through which the PLM is exposed.",
-)
-@click.option(
     '-r',
     '--root',
     default=os.environ.get(
@@ -78,7 +88,7 @@ class AllLinkModeType(click.ParamType):
     help="The root path for all the configuration and database files.",
 )
 @click.pass_context
-def pysteon(ctx, debug, serial_port_url, root):
+def pysteon(ctx, debug, root):
     _setup_logging(debug=debug)
     ctx.obj = {'debug': debug}
 
@@ -100,23 +110,10 @@ def pysteon(ctx, debug, serial_port_url, root):
         )
         database = Database()
 
-    logger.debug(
-        "Connecting with PowerLine Modem on serial port: %s. Please wait...",
-        important(serial_port_url),
-    )
-
     ctx.obj['database'] = database
-    loop = ctx.obj['loop'] = asyncio.get_event_loop()
-    plm = ctx.obj['plm'] = PowerLineModem(
-        serial_port_url=serial_port_url,
-        loop=loop,
-    )
 
     @ctx.call_on_close
-    def close_plm():
-        logger.debug("Closing %s. Please wait...", important(str(plm)))
-        plm.close()
-        logger.debug("Closed %s.", important(str(plm)))
+    def close():
         logger.debug("Saving database at %s.", important(database_path))
 
         try:
@@ -129,18 +126,48 @@ def pysteon(ctx, debug, serial_port_url, root):
                 error(str(ex)),
             )
 
+
+@pysteon.group(
+    help="Manage and monitor the Insteon devices network.",
+)
+@click.option(
+    '-s',
+    '--serial-port-url',
+    default=os.environ.get('PYSTEON_SERIAL_PORT_URL', '/dev/ttyUSB0'),
+    help="The serial port URL through which the PLM is exposed.",
+)
+@click.pass_context
+def plm(ctx, serial_port_url):
+    logger.debug(
+        "Connecting with PowerLine Modem on serial port: %s. Please wait...",
+        important(serial_port_url),
+    )
+
+    loop = ctx.obj['loop'] = asyncio.get_event_loop()
+    plm = ctx.obj['plm'] = PowerLineModem(
+        serial_port_url=serial_port_url,
+        loop=loop,
+    )
+
+    @ctx.call_on_close
+    def close():
+        logger.debug("Closing %s. Please wait...", important(str(plm)))
+        plm.close()
+        logger.debug("Closed %s.", important(str(plm)))
+
     logger.debug(
         "Connected with: %s.",
         important(str(plm)),
     )
 
 
-@pysteon.command(help="Show information about the PLM.")
+@plm.command(help="Show information about the PLM.")
 @click.pass_context
 def info(ctx):
     debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
+    database = ctx.obj['database']
 
     try:
         logger.info(
@@ -167,7 +194,12 @@ def info(ctx):
             logger.info("Controllers:")
 
             for controller in controllers:
-                logger.info("%s", controller)
+                device = database.get_device(controller.identity)
+
+                if device:
+                    logger.info("%s - %s (%s)", controller, device['alias'], device['categories'][1])
+                else:
+                    logger.info("%s", controller)
 
         if responders:
             logger.info("Responders:")
@@ -182,7 +214,7 @@ def info(ctx):
             logger.error("Unexpected error: %s.", ex)
 
 
-@pysteon.command(help="Monitor the PLM for Insteon events.")
+@plm.command(help="Monitor the PLM for Insteon events.")
 @click.pass_context
 def monitor(ctx):
     debug = ctx.obj['debug']
@@ -213,8 +245,8 @@ def monitor(ctx):
             logger.error("Unexpected error: %s.", ex)
 
 
-@pysteon.command(
-    help="Associate the PLM with a new Insteon device (all-link).",
+@plm.command(
+    help="Associate the PLM with a new Insteon device.",
 )
 @click.option(
     '-g',
@@ -253,6 +285,7 @@ def link(ctx, group, mode, timeout, alias, description):
     debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
+    database = ctx.obj['database']
 
     try:
         logger.info(
@@ -313,3 +346,35 @@ def link(ctx, group, mode, timeout, alias, description):
 
     finally:
         logger.info("All-linking process completed.")
+
+
+@pysteon.command(
+    'set-alias',
+    help="Update the alias of a device in the database.",
+)
+@click.argument(
+    'identity',
+    type=IdentityType(),
+)
+@click.argument(
+    'alias',
+    type=str,
+)
+@click.option(
+    '-f',
+    '--force',
+    is_flag=True,
+    default=None,
+    help="Force setting the alias even if the device doesn't exist yet.",
+)
+@click.pass_context
+def set_alias(ctx, identity, alias, force):
+    database = ctx.obj['database']
+
+    device = database.get_device(identity)
+
+    # TODO: Implement force
+    if device is None:
+        raise click.ClickException("No such device found: %s." % identity)
+
+    database.set_device(identity, alias=alias)
