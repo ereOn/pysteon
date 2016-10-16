@@ -12,6 +12,7 @@ from .log import logger
 
 
 MESSAGE_START_BYTE = 0x02
+MESSAGE_FAILURE_BYTE = 0x15
 
 
 class CommandCode(IntEnum):
@@ -84,6 +85,17 @@ BODY_SIZES = {
 }
 
 
+class MessageFailure(RuntimeError):
+    """
+    Represents a failure.
+    """
+    command_code = None
+    body = None
+
+    def __str__(self):
+        return "[<<<] 0x15: %s" % super().__str__()
+
+
 class BaseMessage(object):
     """
     Base class for messages.
@@ -93,7 +105,7 @@ class BaseMessage(object):
         self.body = bytearray(body)
 
     def __eq__(self, value):
-        if not isinstance(value, IncomingMessage):
+        if not isinstance(value, BaseMessage):
             return NotImplemented
 
         return self.command_code == value.command_code and \
@@ -183,6 +195,12 @@ def parse_message(buffer):
     """
     _discard_until_message_start(buffer)
 
+    if buffer and buffer[0] == MESSAGE_FAILURE_BYTE:
+        buffer[:] = buffer[1:]
+        return MessageFailure(
+            'Command send failure (probable collision). Expect a retry.',
+        ), 2 - len(buffer)
+
     # It takes at least 2 bytes to move forward.
     if len(buffer) < 2:
         return None, 2 - len(buffer)
@@ -233,7 +251,7 @@ def _discard_until_message_start(buffer):
     discarded_bytes = bytearray()
 
     for index, c in enumerate(buffer):
-        if c != MESSAGE_START_BYTE:
+        if c not in {MESSAGE_START_BYTE, MESSAGE_FAILURE_BYTE}:
             discarded_bytes.append(c)
         else:
             break

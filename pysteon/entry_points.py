@@ -14,6 +14,7 @@ from chromalog.mark.helpers.simple import (
     important,
     success,
 )
+from itertools import chain
 
 from .database import Database
 from .plm import PowerLineModem
@@ -76,7 +77,7 @@ class IdentityType(click.ParamType):
     '--debug',
     is_flag=True,
     default=None,
-    help="Enabled debug output.",
+    help="Enable debug output.",
 )
 @click.option(
     '-r',
@@ -161,8 +162,15 @@ def plm(ctx, serial_port_url):
 
 
 @plm.command(help="Show information about the PLM.")
+@click.option(
+    '-f',
+    '--fetch',
+    is_flag=True,
+    default=None,
+    help="Fetch missing information about devices.",
+)
 @click.pass_context
-def info(ctx):
+def info(ctx, fetch):
     debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
@@ -189,11 +197,70 @@ def info(ctx):
             plm.get_all_link_records(),
         )
 
+        devices = database.get_devices()
+
+        if fetch:
+            missing_device_identities = {
+                record.identity for record in chain(controllers, responders)
+                if devices.get(record.identity) is None
+            }
+
+            if missing_device_identities:
+                logger.info(
+                    "Fetching missing device information for %d device(s)...",
+                    len(missing_device_identities),
+                )
+
+                for index, identity in enumerate(
+                    missing_device_identities,
+                    start=1,
+                ):
+                    logger.info(
+                        "[%d/%d] %s...",
+                        index,
+                        len(missing_device_identities),
+                        identity,
+                    )
+
+                    try:
+                        device_info = loop.run_until_complete(
+                            asyncio.wait_for(
+                                plm.id_request(identity),
+                                2,
+                            ),
+                        )
+                    except asyncio.TimeoutError:
+                        logger.info(
+                            "[%d/%d] %s: %s",
+                            index,
+                            len(missing_device_identities),
+                            identity,
+                            error("timed out"),
+                        )
+                    else:
+                        devices[identity] = database.set_device(
+                            identity=device_info['identity'],
+                            alias=None,
+                            description=None,
+                            category=device_info['category'],
+                            subcategory=device_info['subcategory'],
+                            firmware_version=device_info['firmware_version'],
+                        )
+                        logger.info(
+                            "[%d/%d] %s: %s",
+                            index,
+                            len(missing_device_identities),
+                            identity,
+                            success("success"),
+                        )
+
+                logger.info("Done fetching missing device information.")
+
         if controllers:
             logger.info("Controllers:")
 
             for controller in controllers:
-                device = database.get_device(controller.identity)
+                device = devices.get(controller.identity)
 
                 if device:
                     logger.info("%s - %s", controller, success(device))
@@ -204,7 +271,12 @@ def info(ctx):
             logger.info("Responders:")
 
             for responder in responders:
-                logger.info("%s", responder)
+                device = devices.get(responder.identity)
+
+                if device:
+                    logger.info("%s - %s", responder, success(device))
+                else:
+                    logger.info("%s", responder)
 
     except Exception as ex:
         if debug:

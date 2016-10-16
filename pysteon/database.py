@@ -92,11 +92,22 @@ class Database(object):
             ],
         )), None)
 
+    def get_devices(self):
+        return {
+            device.identity: device
+            for device in map(DatabaseDevice.from_row, self._db.execute(
+                'SELECT * FROM devices',
+            ))
+        }
+
     def set_device(self, *args, **kwargs):
+        device = DatabaseDevice(*args, **kwargs)
         self._db.execute(
             'INSERT OR REPLACE INTO devices VALUES (%s)' % ', '.join(
                 '?' * len(self.DATABASE_FIELDS),
             ),
-            DatabaseDevice(*args, **kwargs).to_row(),
+            device.to_row(),
         )
         self._db.commit()
+
+        return device

@@ -22,6 +22,7 @@ from .exceptions import CommandFailure
 from .log import logger as main_logger
 from .messaging import (
     CommandCode,
+    MessageFailure,
     OutgoingMessage,
     check_ack_or_nak,
     format_message,
@@ -76,12 +77,12 @@ class PowerLineModem(object):
         self.__monitor_interrupt = asyncio.Event(loop=self.loop)
 
         logger.debug("Querying PLM's information...")
-        (
-            self.identity,
-            self.device_category,
-            self.device_subcategory,
-            self.firmware_version,
-        ) = self.loop.run_until_complete(self.get_info())
+
+        info = self.loop.run_until_complete(self.get_info())
+        self.identity = info['identity']
+        self.device_category = info['category']
+        self.device_subcategory = info['subcategory']
+        self.firmware_version = info['firmware_version']
 
         self.on_all_linking_completed = Signal()
         self.on_all_linking_completed.connect(
@@ -118,9 +119,10 @@ class PowerLineModem(object):
                 body=message.body,
             ),
         )
+        self._serial.flushOutput()
 
     @contextmanager
-    def read(self, command_codes=None):
+    def read(self, command_codes=None, handle_failures=False):
         """
         Read from the PLM.
 
@@ -131,7 +133,9 @@ class PowerLineModem(object):
         queue = asyncio.Queue(loop=self.loop)
 
         def read_one(message):
-            if command_codes is None or message.command_code in command_codes:
+            if handle_failures and isinstance(message, Exception):
+                queue.put_nowait(message)
+            elif command_codes is None or message.command_code in command_codes:
                 queue.put_nowait(message)
 
         self.on_message.connect(read_one)
@@ -141,6 +145,75 @@ class PowerLineModem(object):
         finally:
             self.on_message.disconnect(read_one)
 
+    async def write_read(
+        self,
+        *,
+        command_code,
+        body=None,
+        command_codes=None,
+        retry_delay=0.5
+    ):
+        """
+        Perform a write-read sequence with automatic retry on failure.
+
+        :param command_code: The command code to write.
+        :param body: The body to send.
+        :param command_codes: An optional list of command codes to accept as
+            responses.
+        :returns: The first response.
+        """
+        async with self.__write_lock:
+            try:
+                with self.read(
+                    command_codes=command_codes,
+                    handle_failures=True,
+                ) as queue:
+                    response = None
+
+                    while not response:
+                        self.write(command_code=command_code, body=body or b'')
+                        response = await queue.get()
+
+                        if isinstance(response, MessageFailure):
+                            logger.debug("Write operation failed. Retrying...")
+                            response = None
+                            await asyncio.sleep(retry_delay)
+            except Exception:
+                self._flush()
+                raise
+
+        return response
+
+    @contextmanager
+    def read_insteon_messages(self):
+        """
+        Context manager that reads Insteon messages.
+        """
+        async def read_queue(queue, insteon_queue):
+            while True:
+                response = await queue.get()
+                insteon_message = InsteonMessage.from_message_body(
+                    response.body,
+                )
+                insteon_queue.put_nowait(insteon_message)
+
+        insteon_queue = asyncio.Queue(loop=self.loop)
+
+        with self.read(
+            command_codes=[
+                CommandCode.standard_message_received,
+                CommandCode.extended_message_received,
+            ],
+        ) as queue:
+            read_queue_task = asyncio.ensure_future(
+                read_queue(queue, insteon_queue),
+            )
+
+            try:
+                yield insteon_queue
+            finally:
+                read_queue_task.cancel()
+
     async def get_info(self):
         """
         Get the PLM information.
@@ -148,19 +221,24 @@ class PowerLineModem(object):
         :returns: A 4-tuple (identity, device category, device subcategory,
             firmware version).
         """
-        async with self.__write_lock:
-            with self.read(command_codes=[CommandCode.get_im_info]) as queue:
-                self.write(command_code=CommandCode.get_im_info)
-                response = await queue.get()
+        response = await self.write_read(
+            command_code=CommandCode.get_im_info,
+            command_codes=[CommandCode.get_im_info],
+        )
 
         check_ack_or_nak(response)
         identity = Identity(response.body[:3])
-        device_category, device_subcategory = parse_device_categories(
+        category, subcategory = parse_device_categories(
             response.body[3:5],
         )
         firmware_version = response.body[5]
 
-        return identity, device_category, device_subcategory, firmware_version
+        return {
+            'identity': identity,
+            'category': category,
+            'subcategory': subcategory,
+            'firmware_version': firmware_version,
+        }
 
     async def get_all_link_records(self):
         """
@@ -209,36 +287,30 @@ class PowerLineModem(object):
         :param group: The group to start the session for.
         :param mode: The mode to start the session as.
         """
-        async with self.__write_lock:
-            with self.read(
-                command_codes=[CommandCode.start_all_linking],
-            ) as queue:
-                self.write(
-                    CommandCode.start_all_linking,
-                    bytes([mode.value, group]),
-                )
-                response = await queue.get()
-                check_ack_or_nak(response)
-                logger.debug(
-                    "%s started all-linking session for group %s "
-                    "in '%s' mode.",
-                    self,
-                    hex(group),
-                    mode,
-                )
+        response = await self.write_read(
+            command_code=CommandCode.start_all_linking,
+            body=bytes([mode.value, group]),
+            command_codes=[CommandCode.start_all_linking],
+        )
+        check_ack_or_nak(response)
+        logger.debug(
+            "%s started all-linking session for group %s "
+            "in '%s' mode.",
+            self,
+            hex(group),
+            mode,
+        )
 
     async def cancel_all_linking_session(self):
         """
         Cancel an all-linking session.
         """
-        async with self.__write_lock:
-            with self.read(
-                command_codes=[CommandCode.cancel_all_linking],
-            ) as queue:
-                self.write(CommandCode.cancel_all_linking)
-                response = await queue.get()
-                check_ack_or_nak(response)
-                logger.debug("%s cancelled all-linking session", self)
+        response = await self.write_read(
+            command_code=CommandCode.cancel_all_linking,
+            command_codes=[CommandCode.cancel_all_linking],
+        )
+        check_ack_or_nak(response)
+        logger.debug("%s cancelled all-linking session", self)
 
     def all_linking_session(self, group, mode=AllLinkMode.auto):
         """
@@ -319,18 +391,14 @@ class PowerLineModem(object):
 
         :param message: The Insteon message to send.
         """
-        async with self.__write_lock:
-            with self.read(
-                command_codes=[CommandCode.send_standard_or_extended_message],
-            ) as queue:
-                self.on_insteon_message.emit(message)
-                self.write(
-                    command_code=CommandCode.send_standard_or_extended_message,
-                    body=message.to_message_body(),
-                )
-                response = await queue.get()
-
+        response = await self.write_read(
+            command_code=CommandCode.send_standard_or_extended_message,
+            body=message.to_message_body(),
+            command_codes=[CommandCode.send_standard_or_extended_message],
+        )
         check_ack_or_nak(response)
+
+        return response
 
     async def id_request(self, identity):
         """
@@ -338,15 +406,35 @@ class PowerLineModem(object):
 
         :param identity: The device identity.
         """
-        await self.send_standard_or_extended_message(message=InsteonMessage(
-            sender=self.identity,
-            target=identity,
-            hops_left=2,
-            max_hops=3,
-            flags={InsteonMessageFlag.all_link},
-            command_bytes=b'\x10\x00',
-            user_data=b'',
-        ))
+        with self.read_insteon_messages() as queue:
+            await self.send_standard_or_extended_message(
+                message=InsteonMessage(
+                    sender=self.identity,
+                    target=identity,
+                    hops_left=2,
+                    max_hops=3,
+                    flags=set(),
+                    command_bytes=b'\x10\x00',
+                    user_data=b'',
+                )
+            )
+
+            while True:
+                insteon_message = await queue.get()
+
+                if insteon_message.sender == identity and \
+                        insteon_message.target != self.identity:
+                    category, subcategory = parse_device_categories(
+                        insteon_message.target[0:2],
+                    )
+                    firmware_version = insteon_message.target[2]
+
+                    return {
+                        'identity': identity,
+                        'category': category,
+                        'subcategory': subcategory,
+                        'firmware_version': firmware_version,
+                    }
 
     # Private methods below.
 
@@ -399,17 +487,15 @@ class PowerLineModem(object):
                 subcategory=subcategory,
                 firmware_version=firmware_version,
             )
-
-    def _monitor_message(self, message):
-        # We only care about Insteon messages.
-        if message.command_code not in {
+        elif message.command_code in {
             CommandCode.standard_message_received,
             CommandCode.extended_message_received,
         }:
-            return
+            insteon_message = InsteonMessage.from_message_body(message.body)
+            self.on_insteon_message.emit(insteon_message)
 
-        insteon_message = InsteonMessage.from_message_body(message.body)
-        self.on_insteon_message.emit(insteon_message)
+    def _monitor_message(self, message):
+        pass
 
     def _handle_all_linking_completed(
         self,
