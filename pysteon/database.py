@@ -100,6 +100,14 @@ class Database(object):
             ))
         }
 
+    def get_device_by_alias(self, alias):
+        return next(map(DatabaseDevice.from_row, self._db.execute(
+            'SELECT * FROM devices WHERE (alias = ?)',
+            [
+                alias,
+            ],
+        )), None)
+
     def set_device(self, *args, **kwargs):
         device = DatabaseDevice(*args, **kwargs)
         self._db.execute(

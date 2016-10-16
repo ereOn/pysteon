@@ -68,6 +68,33 @@ class IdentityType(click.ParamType):
             )
 
 
+class DeviceType(click.ParamType):
+    name = "Device"
+
+    def __init__(self, required=True):
+        super().__init__()
+        self.required = required
+
+    def convert(self, value, param, ctx):
+        database = ctx.obj['database']
+
+        try:
+            identity = Identity.from_string(value)
+        except ValueError:
+            device = database.get_device_by_alias(value)
+        else:
+            device = database.get_device(identity)
+
+        if not device and self.required:
+            raise click.BadParameter(
+                message="No such device: %s" % value,
+                ctx=ctx,
+                param=param,
+            )
+
+        return device
+
+
 @click.group(
     help="pysteon is a command-line interface (CLI) for managing and "
     "monitoring your Insteon network through a PLM device.",
@@ -448,16 +475,16 @@ def link(ctx, group, mode, timeout, alias, description):
     help="Change the light level instantly.",
 )
 @click.argument(
-    'identity',
-    type=IdentityType(),
+    'device',
+    type=DeviceType(),
 )
 @click.pass_context
-def link(ctx, identity, level, instant):
+def light_on(ctx, device, level, instant):
     debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
-    loop.run_until_complete(plm.light_on(identity, level, instant))
+    loop.run_until_complete(plm.light_on(device.identity, level, instant))
 
 
 @plm.command(
@@ -472,45 +499,46 @@ def link(ctx, identity, level, instant):
     help="Change the light level instantly.",
 )
 @click.argument(
-    'identity',
-    type=IdentityType(),
+    'device',
+    type=DeviceType(),
 )
 @click.pass_context
-def link(ctx, identity, instant):
+def light_off(ctx, device, instant):
     debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
-    loop.run_until_complete(plm.light_off(identity, instant))
+    loop.run_until_complete(plm.light_off(device.identity, instant))
 
 
 @pysteon.command(
-    'set-alias',
-    help="Update the alias of a device in the database.",
+    'update',
+    help="Update a device database entry",
 )
 @click.argument(
-    'identity',
-    type=IdentityType(),
-)
-@click.argument(
-    'alias',
-    type=str,
+    'device',
+    type=DeviceType(),
 )
 @click.option(
-    '-f',
-    '--force',
-    is_flag=True,
+    '-a',
+    '--alias',
     default=None,
-    help="Force setting the alias even if the device doesn't exist yet.",
+    help="The alias to set.",
+)
+@click.option(
+    '-d',
+    '--description',
+    default=None,
+    help="The description to set.",
 )
 @click.pass_context
-def set_alias(ctx, identity, alias, force):
+def update(ctx, device, alias, description):
     database = ctx.obj['database']
 
-    device = database.get_device(identity)
+    if alias:
+        device = device._replace(alias=alias)
 
-    # TODO: Implement force
-    if device is None:
-        raise click.ClickException("No such device found: %s." % identity)
+    if description:
+        device = device._replace(description=description)
 
-    database.set_device(identity, alias=alias)
+    database.set_device(*device)

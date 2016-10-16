@@ -22,6 +22,16 @@ def test_get_device_non_existing():
     assert database.get_device(Identity(b'\x01\x02\x03')) is None
 
 
+def test_get_devices_non_existing():
+    database = Database.load_from_file(':memory:')
+    assert database.get_devices() == {}
+
+
+def test_get_device_by_alias_non_existing():
+    database = Database.load_from_file(':memory:')
+    assert database.get_device_by_alias('foo') is None
+
+
 def test_set_device():
     database = Database.load_from_file(':memory:')
     identity = Identity(b'\x01\x02\x03')
@@ -36,6 +46,7 @@ def test_set_device():
     database.set_device(*database_device)
 
     assert database.get_device(identity) == database_device
+    assert database.get_device_by_alias('foo') == database_device
 
 
 def test_set_existing_device():
