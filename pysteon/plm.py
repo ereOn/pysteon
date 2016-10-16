@@ -436,7 +436,59 @@ class PowerLineModem(object):
                         'firmware_version': firmware_version,
                     }
 
+    async def light_on(self, identity, level=1.0, instant=False):
+        """
+        Send a light ON request to the specified device.
+
+        :param identity: The device identity.
+        :param level: The level to turn the light on to.
+        :param instant: A flag that if set, cause the light level to change
+            instantly.
+        """
+        await self.send_standard_or_extended_message(
+            message=InsteonMessage(
+                sender=self.identity,
+                target=identity,
+                hops_left=2,
+                max_hops=3,
+                flags=set(),
+                command_bytes=bytes([
+                    0x12 if instant else 0x11,
+                    self._level_to_byte(level),
+                ]),
+                user_data=b'',
+            )
+        )
+
+    async def light_off(self, identity, instant=False):
+        """
+        Send a light OFF request to the specified device.
+
+        :param identity: The device identity.
+        :param level: The level to turn the light off to.
+        :param instant: A flag that if set, cause the light level to change
+            instantly.
+        """
+        await self.send_standard_or_extended_message(
+            message=InsteonMessage(
+                sender=self.identity,
+                target=identity,
+                hops_left=2,
+                max_hops=3,
+                flags=set(),
+                command_bytes=bytes([
+                    0x14 if instant else 0x13,
+                    0x00,
+                ]),
+                user_data=b'',
+            )
+        )
+
     # Private methods below.
+
+    @staticmethod
+    def _level_to_byte(level):
+        return min(0xFF, max(0x00, round(level * 256)))
 
     def _flush(self):
         self._serial.flushInput()

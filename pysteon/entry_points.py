@@ -396,7 +396,7 @@ def link(ctx, group, mode, timeout, alias, description):
                     )
                 else:
                     logger.info(
-                        "All linking succeeded with %s-%s (%s) in mode.",
+                        "All linking succeeded with %s-%s (%s) in mode %s.",
                         important(all_link_info['identity']),
                         hex(all_link_info['group']),
                         all_link_info['subcategory'],
@@ -427,6 +427,61 @@ def link(ctx, group, mode, timeout, alias, description):
 
     finally:
         logger.info("All-linking process completed.")
+
+
+@plm.command(
+    'light-on',
+    help="Turn a light on.",
+)
+@click.option(
+    '-l',
+    '--level',
+    default=1.0,
+    type=float,
+    help="The light level to set, as a floating-point number.",
+)
+@click.option(
+    '-i',
+    '--instant',
+    is_flag=True,
+    default=False,
+    help="Change the light level instantly.",
+)
+@click.argument(
+    'identity',
+    type=IdentityType(),
+)
+@click.pass_context
+def link(ctx, identity, level, instant):
+    debug = ctx.obj['debug']
+    loop = ctx.obj['loop']
+    plm = ctx.obj['plm']
+
+    loop.run_until_complete(plm.light_on(identity, level, instant))
+
+
+@plm.command(
+    'light-off',
+    help="Turn a light off.",
+)
+@click.option(
+    '-i',
+    '--instant',
+    is_flag=True,
+    default=False,
+    help="Change the light level instantly.",
+)
+@click.argument(
+    'identity',
+    type=IdentityType(),
+)
+@click.pass_context
+def link(ctx, identity, instant):
+    debug = ctx.obj['debug']
+    loop = ctx.obj['loop']
+    plm = ctx.obj['plm']
+
+    loop.run_until_complete(plm.light_off(identity, instant))
 
 
 @pysteon.command(
