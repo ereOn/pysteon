@@ -6,6 +6,7 @@ import asyncio
 
 from contextlib import contextmanager
 from functools import partial
+from itertools import chain
 from pyslot.thread_safe_signal import ThreadSafeSignal as Signal
 from serial import (
     EIGHTBITS,
@@ -484,11 +485,65 @@ class PowerLineModem(object):
             )
         )
 
+    async def remote_enter_linking(self, identity, group=0x01):
+        """
+        Tell a remote device to enter linking mode.
+
+        :param identity: The device identity.
+        :param group: A group to enter remote linking into.
+        """
+        command_bytes = bytes([0x09, group])
+        user_data = bytes([0x00] * 14)
+        user_data = self._checksum(command_bytes, user_data)
+
+        await self.send_standard_or_extended_message(
+            message=InsteonMessage(
+                sender=self.identity,
+                target=identity,
+                hops_left=2,
+                max_hops=3,
+                flags={InsteonMessageFlag.extended},
+                command_bytes=command_bytes,
+                user_data=user_data,
+            )
+        )
+
+    async def remote_enter_unlinking(self, identity, group=0x01):
+        """
+        Tell a remote device to enter unlinking mode.
+
+        :param identity: The device identity.
+        :param group: A group to enter remote unlinking into.
+        """
+        command_bytes = bytes([0x0A, group])
+        user_data = bytes([0x00] * 14)
+        user_data = self._checksum(command_bytes, user_data)
+
+        await self.send_standard_or_extended_message(
+            message=InsteonMessage(
+                sender=self.identity,
+                target=identity,
+                hops_left=2,
+                max_hops=3,
+                flags={InsteonMessageFlag.extended},
+                command_bytes=command_bytes,
+                user_data=user_data,
+            )
+        )
+
     # Private methods below.
 
     @staticmethod
     def _level_to_byte(level):
         return min(0xFF, max(0x00, round(level * 256)))
+
+    @staticmethod
+    def _checksum(command_bytes, user_data):
+        assert len(command_bytes) == 2
+        assert len(user_data) == 14
+
+        s = sum(chain(command_bytes, user_data[:-1]))
+        return bytes(chain(user_data[:-1], [(0xff ^ s) + 1]))
 
     def _flush(self):
         self._serial.flushInput()

@@ -511,6 +511,58 @@ def light_off(ctx, device, instant):
     loop.run_until_complete(plm.light_off(device.identity, instant))
 
 
+@plm.command(
+    'remote-enter-linking',
+    help="Cause a device enter in linking mode.",
+)
+@click.option(
+    '-g',
+    '--group',
+    default=0x01,
+    type=int,
+    help="The group to enter remote-linking into.",
+)
+@click.argument(
+    'device',
+    type=DeviceType(),
+)
+@click.pass_context
+def remote_enter_linking(ctx, device, group):
+    debug = ctx.obj['debug']
+    loop = ctx.obj['loop']
+    plm = ctx.obj['plm']
+
+    loop.run_until_complete(
+        plm.remote_enter_linking(device.identity, group=group),
+    )
+
+
+@plm.command(
+    'remote-enter-unlinking',
+    help="Cause a device enter in unlinking mode.",
+)
+@click.option(
+    '-g',
+    '--group',
+    default=0x01,
+    type=int,
+    help="The group to enter remote-unlinking into.",
+)
+@click.argument(
+    'device',
+    type=DeviceType(),
+)
+@click.pass_context
+def remote_enter_unlinking(ctx, device, group):
+    debug = ctx.obj['debug']
+    loop = ctx.obj['loop']
+    plm = ctx.obj['plm']
+
+    loop.run_until_complete(
+        plm.remote_enter_unlinking(device.identity, group=group),
+    )
+
+
 @pysteon.command(
     'update',
     help="Update a device database entry",

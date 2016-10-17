@@ -216,7 +216,18 @@ def parse_message(buffer):
 
         return None, 2
 
-    body, expected = _extract_body(buffer, BODY_SIZES[command_code])
+    extension = 0
+
+    # If the message is an Insteon message and has the extended flag, we expect
+    # 14 user-data more bytes.
+    if command_code == CommandCode.send_standard_or_extended_message:
+        if len(buffer) >= 6 and buffer[5] & (1 << 4):
+            extension = 14
+
+    body, expected = _extract_body(
+        buffer,
+        BODY_SIZES[command_code] + extension,
+    )
 
     # Not enough bytes to process the message. Let's wait for more.
     if body is None:
