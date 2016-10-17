@@ -525,9 +525,9 @@ class PowerLineModem(object):
                 target=identity,
                 hops_left=2,
                 max_hops=3,
-                flags={InsteonMessageFlag.extended},
+                flags=set(),
                 command_bytes=command_bytes,
-                user_data=user_data,
+                user_data=b'',
             )
         )
 
