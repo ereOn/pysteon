@@ -571,11 +571,61 @@ class PowerLineModem(object):
             )
         )
 
+    async def get_device_info(self, identity):
+        """
+        Get device information.
+
+        :param identity: The device identity.
+        :return: The device information dict.
+        """
+        command_bytes = bytes([0x2e, 0x00])
+        user_data = bytes([0x00] * 14)
+
+        with self.read_insteon_messages() as queue:
+            await self.send_standard_or_extended_message(
+                message=InsteonMessage(
+                    sender=self.identity,
+                    target=identity,
+                    hops_left=2,
+                    max_hops=3,
+                    flags={InsteonMessageFlag.extended},
+                    command_bytes=command_bytes,
+                    user_data=user_data,
+                )
+            )
+
+            # First message is an ack.
+            response = await queue.get()
+            assert InsteonMessageFlag.ack in response.flags
+
+            # Second one is the actual answer.
+            response = await queue.get()
+            return {
+                'x10_house_code': response.user_data[4],
+                'x10_unit_code': response.user_data[5],
+                'ramp_rate': self._byte_to_level(
+                    response.user_data[6],
+                    max_value=0x1f,
+                ),
+                'on_level': self._byte_to_level(response.user_data[7]),
+                'led_level': self._byte_to_level(
+                    response.user_data[8],
+                    min_value=0x00,
+                    max_value=0x7f,
+                ),
+            }
+
     # Private methods below.
 
     @staticmethod
-    def _level_to_byte(level):
-        return min(0xFF, max(0x00, round(level * 256)))
+    def _level_to_byte(level, min_value=0x00, max_value=0xff):
+        assert min_value < max_value
+        return min(max_value, max(min_value, round(level * 256)))
+
+    @staticmethod
+    def _byte_to_level(byte, min_value=0x00, max_value=0xff):
+        assert min_value < max_value
+        return (byte - min_value) / max_value
 
     @staticmethod
     def _checksum(command_bytes, user_data):

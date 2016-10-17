@@ -599,6 +599,29 @@ def remote_set(ctx, device):
     loop.run_until_complete(plm.beep(device.identity))
 
 
+@plm.command(
+    'get-device-info',
+    help="Get a device information.",
+)
+@click.argument(
+    'device',
+    type=DeviceType(),
+)
+@click.pass_context
+def remote_set(ctx, device):
+    debug = ctx.obj['debug']
+    loop = ctx.obj['loop']
+    plm = ctx.obj['plm']
+
+    info = loop.run_until_complete(plm.get_device_info(device.identity))
+    logger.info("Device information for: %s", important(device))
+    logger.info("Ramp rate: %s", info['ramp_rate'])
+    logger.info("On level: %s", info['on_level'])
+    logger.info("LED level: %s", info['led_level'])
+    logger.info("X10 house code: %s", info['x10_house_code'])
+    logger.info("X10 unit code: %s", info['x10_unit_code'])
+
+
 @pysteon.command(
     'update',
     help="Update a device database entry",
