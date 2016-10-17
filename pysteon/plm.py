@@ -531,6 +531,46 @@ class PowerLineModem(object):
             )
         )
 
+    async def remote_set(self, identity):
+        """
+        Emulates a remote tap of a set button.
+
+        :param identity: The device identity.
+        """
+        command_bytes = bytes([0x25, 0x00])
+
+        await self.send_standard_or_extended_message(
+            message=InsteonMessage(
+                sender=self.identity,
+                target=identity,
+                hops_left=2,
+                max_hops=3,
+                flags=set(),
+                command_bytes=command_bytes,
+                user_data=b'',
+            )
+        )
+
+    async def beep(self, identity):
+        """
+        Emulates a remote tap of a set button.
+
+        :param identity: The device identity.
+        """
+        command_bytes = bytes([0x30, 0x00])
+
+        await self.send_standard_or_extended_message(
+            message=InsteonMessage(
+                sender=self.identity,
+                target=identity,
+                hops_left=2,
+                max_hops=3,
+                flags=set(),
+                command_bytes=command_bytes,
+                user_data=b'',
+            )
+        )
+
     # Private methods below.
 
     @staticmethod

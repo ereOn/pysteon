@@ -563,6 +563,42 @@ def remote_enter_unlinking(ctx, device, group):
     )
 
 
+@plm.command(
+    'remote-set',
+    help="Cause a device set button tap.",
+)
+@click.argument(
+    'device',
+    type=DeviceType(),
+)
+@click.pass_context
+def remote_set(ctx, device):
+    debug = ctx.obj['debug']
+    loop = ctx.obj['loop']
+    plm = ctx.obj['plm']
+
+    loop.run_until_complete(
+        plm.remote_set(device.identity),
+    )
+
+
+@plm.command(
+    'beep',
+    help="Cause a device to beep.",
+)
+@click.argument(
+    'device',
+    type=DeviceType(),
+)
+@click.pass_context
+def remote_set(ctx, device):
+    debug = ctx.obj['debug']
+    loop = ctx.obj['loop']
+    plm = ctx.obj['plm']
+
+    loop.run_until_complete(plm.beep(device.identity))
+
+
 @pysteon.command(
     'update',
     help="Update a device database entry",
