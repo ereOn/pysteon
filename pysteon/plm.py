@@ -626,6 +626,9 @@ class PowerLineModem(object):
         if device_info == DeviceInfo.ramp_rate:
             device_info_byte_index = 2
             device_info_byte_value = int(value)
+        elif device_info == DeviceInfo.led_brightness:
+            device_info_byte_index = 2
+            device_info_byte_value = int(value)
 
         user_data = bytes(chain(
             [0, device_info.value],
@@ -672,7 +675,7 @@ class PowerLineModem(object):
         assert len(user_data) == 14
 
         s = sum(chain(command_bytes, user_data[:-1]))
-        return bytes(chain(user_data[:-1], [(0xff ^ s) + 1]))
+        return bytes(chain(user_data[:-1], [((0xff ^ s) + 1) & 0xff]))
 
     def _flush(self):
         self._serial.flushInput()
