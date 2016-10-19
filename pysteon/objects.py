@@ -523,3 +523,20 @@ class InsteonMessage(
             flags=', '.join(flag.name for flag in self.flags),
             user_data=self.user_data.hex(),
         )
+
+
+class DeviceInfo(IntEnum):
+    x10_address = 0x04
+    ramp_rate = 0x05
+    on_level = 0x06
+    led_brightness = 0x07
+
+    @classmethod
+    def from_string(cls, value):
+        try:
+            return getattr(cls, value)
+        except AttributeError:
+            raise ValueError(value)
+
+    def __str__(self):
+        return self.name

@@ -32,6 +32,7 @@ from .messaging import (
 from .objects import (
     AllLinkMode,
     AllLinkRole,
+    DeviceInfo,
     Identity,
     InsteonMessage,
     InsteonMessageFlag,
@@ -603,10 +604,7 @@ class PowerLineModem(object):
             return {
                 'x10_house_code': response.user_data[4],
                 'x10_unit_code': response.user_data[5],
-                'ramp_rate': self._byte_to_level(
-                    response.user_data[6],
-                    max_value=0x1f,
-                ),
+                'ramp_rate': response.user_data[6],
                 'on_level': self._byte_to_level(response.user_data[7]),
                 'led_level': self._byte_to_level(
                     response.user_data[8],
@@ -614,6 +612,47 @@ class PowerLineModem(object):
                     max_value=0x7f,
                 ),
             }
+
+    async def set_device_info(self, identity, device_info, value):
+        """
+        Set device information.
+
+        :param identity: The device identity.
+        :param device_info: The device information to set.
+        :param value: The value.
+        """
+        command_bytes = bytes([0x2e, 0x00])
+
+        if device_info == DeviceInfo.ramp_rate:
+            device_info_byte_index = 2
+            device_info_byte_value = int(value)
+
+        user_data = bytes(chain(
+            [0, device_info.value],
+            [
+                device_info_byte_value if i == device_info_byte_index else 0x00
+                for i in range(2, 14)
+            ],
+        ))
+        user_data = self._checksum(command_bytes, user_data)
+
+        with self.read_insteon_messages() as queue:
+            await self.send_standard_or_extended_message(
+                message=InsteonMessage(
+                    sender=self.identity,
+                    target=identity,
+                    hops_left=2,
+                    max_hops=3,
+                    flags={InsteonMessageFlag.extended},
+                    command_bytes=command_bytes,
+                    user_data=user_data,
+                )
+            )
+
+            # First message is an ack.
+            response = await queue.get()
+            assert InsteonMessageFlag.ack in response.flags
+
 
     # Private methods below.
 

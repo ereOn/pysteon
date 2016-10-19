@@ -20,6 +20,7 @@ from .database import Database
 from .plm import PowerLineModem
 from .objects import (
     AllLinkMode,
+    DeviceInfo,
     Identity,
 )
 from .log import logger
@@ -93,6 +94,23 @@ class DeviceType(click.ParamType):
             )
 
         return device
+
+
+class DeviceInfoType(click.ParamType):
+    name = "DeviceInfo"
+
+    def convert(self, value, param, ctx):
+        try:
+            return DeviceInfo.from_string(value)
+        except ValueError:
+            raise click.BadParameter(
+                message="%s. Can be: %s" % (
+                    value,
+                    ', '.join(map(str, DeviceInfo)),
+                ),
+                ctx=ctx,
+                param=param,
+            )
 
 
 @click.group(
@@ -480,7 +498,6 @@ def link(ctx, group, mode, timeout, alias, description):
 )
 @click.pass_context
 def light_on(ctx, device, level, instant):
-    debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
@@ -504,7 +521,6 @@ def light_on(ctx, device, level, instant):
 )
 @click.pass_context
 def light_off(ctx, device, instant):
-    debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
@@ -528,7 +544,6 @@ def light_off(ctx, device, instant):
 )
 @click.pass_context
 def remote_enter_linking(ctx, device, group):
-    debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
@@ -554,7 +569,6 @@ def remote_enter_linking(ctx, device, group):
 )
 @click.pass_context
 def remote_enter_unlinking(ctx, device, group):
-    debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
@@ -573,7 +587,6 @@ def remote_enter_unlinking(ctx, device, group):
 )
 @click.pass_context
 def remote_set(ctx, device):
-    debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
@@ -592,7 +605,6 @@ def remote_set(ctx, device):
 )
 @click.pass_context
 def remote_set(ctx, device):
-    debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
@@ -601,25 +613,50 @@ def remote_set(ctx, device):
 
 @plm.command(
     'get-device-info',
-    help="Get a device information.",
+    help="Get a device parameters.",
 )
 @click.argument(
     'device',
     type=DeviceType(),
 )
 @click.pass_context
-def remote_set(ctx, device):
-    debug = ctx.obj['debug']
+def get_device_info(ctx, device):
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
     info = loop.run_until_complete(plm.get_device_info(device.identity))
     logger.info("Device information for: %s", important(device))
-    logger.info("Ramp rate: %s", info['ramp_rate'])
+    logger.info("Ramp rate: %s", hex(info['ramp_rate']))
     logger.info("On level: %s", info['on_level'])
     logger.info("LED level: %s", info['led_level'])
     logger.info("X10 house code: %s", info['x10_house_code'])
     logger.info("X10 unit code: %s", info['x10_unit_code'])
+
+
+@plm.command(
+    'set-device-info',
+    help="Set a device parameter.",
+)
+@click.argument(
+    'device',
+    type=DeviceType(),
+)
+@click.argument(
+    'device_info',
+    type=DeviceInfoType(),
+)
+@click.argument(
+    'value',
+    type=float,
+)
+@click.pass_context
+def get_device_info(ctx, device, device_info, value):
+    loop = ctx.obj['loop']
+    plm = ctx.obj['plm']
+
+    loop.run_until_complete(
+        plm.set_device_info(device.identity, device_info, value),
+    )
 
 
 @pysteon.command(
