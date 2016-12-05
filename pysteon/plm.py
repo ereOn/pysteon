@@ -39,6 +39,10 @@ from .objects import (
     parse_all_link_record_response,
     parse_device_categories,
 )
+from .units import (
+    ramp_rate_from_seconds,
+    ramp_rate_to_seconds,
+)
 
 logger = main_logger.getChild('serial')
 
@@ -604,7 +608,7 @@ class PowerLineModem(object):
             return {
                 'x10_house_code': response.user_data[4],
                 'x10_unit_code': response.user_data[5],
-                'ramp_rate': response.user_data[6],
+                'ramp_rate': ramp_rate_to_seconds(response.user_data[6]),
                 'on_level': self._byte_to_level(response.user_data[7]),
                 'led_level': self._byte_to_level(
                     response.user_data[8],
@@ -625,7 +629,7 @@ class PowerLineModem(object):
 
         if device_info == DeviceInfo.ramp_rate:
             device_info_byte_index = 2
-            device_info_byte_value = int(value)
+            device_info_byte_value = ramp_rate_from_seconds(value)
         elif device_info == DeviceInfo.led_brightness:
             device_info_byte_index = 2
             device_info_byte_value = int(value)

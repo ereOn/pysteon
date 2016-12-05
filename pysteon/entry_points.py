@@ -626,7 +626,7 @@ def get_device_info(ctx, device):
 
     info = loop.run_until_complete(plm.get_device_info(device.identity))
     logger.info("Device information for: %s", important(device))
-    logger.info("Ramp rate: %s", hex(info['ramp_rate']))
+    logger.info("Ramp rate: %s second(s)", info['ramp_rate'])
     logger.info("On level: %s", info['on_level'])
     logger.info("LED level: %s", info['led_level'])
     logger.info("X10 house code: %s", info['x10_house_code'])
@@ -650,7 +650,7 @@ def get_device_info(ctx, device):
     type=float,
 )
 @click.pass_context
-def get_device_info(ctx, device, device_info, value):
+def set_device_info(ctx, device, device_info, value):
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
