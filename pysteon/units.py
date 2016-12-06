@@ -68,3 +68,19 @@ def ramp_rate_to_seconds(value):
     Convert a ramp rate to a number of seconds.
     """
     return project_onto(value, RAMP_RATES, invert=True)
+
+
+def led_brightness_from_percent(value):
+    """
+    Convert a percent from 0 to 100 to a brightness level.
+    """
+    value = min(100, max(0, value))
+    return round((value / 100.0) * 0x7f)
+
+
+def led_brightness_to_percent(value):
+    """
+    Convert a percent from 0 to 100 to a brightness level.
+    """
+    value = min(0x7f, max(0, value))
+    return round((value / 0x7f) * 100)

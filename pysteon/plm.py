@@ -40,6 +40,8 @@ from .objects import (
     parse_device_categories,
 )
 from .units import (
+    led_brightness_from_percent,
+    led_brightness_to_percent,
     ramp_rate_from_seconds,
     ramp_rate_to_seconds,
 )
@@ -610,10 +612,8 @@ class PowerLineModem(object):
                 'x10_unit_code': response.user_data[5],
                 'ramp_rate': ramp_rate_to_seconds(response.user_data[6]),
                 'on_level': self._byte_to_level(response.user_data[7]),
-                'led_level': self._byte_to_level(
+                'led_level': led_brightness_to_percent(
                     response.user_data[8],
-                    min_value=0x00,
-                    max_value=0x7f,
                 ),
             }
 
@@ -632,7 +632,7 @@ class PowerLineModem(object):
             device_info_byte_value = ramp_rate_from_seconds(value)
         elif device_info == DeviceInfo.led_brightness:
             device_info_byte_index = 2
-            device_info_byte_value = int(value)
+            device_info_byte_value = led_brightness_from_percent(value)
 
         user_data = bytes(chain(
             [0, device_info.value],

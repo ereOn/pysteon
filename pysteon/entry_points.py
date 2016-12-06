@@ -628,7 +628,7 @@ def get_device_info(ctx, device):
     logger.info("Device information for: %s", important(device))
     logger.info("Ramp rate: %s second(s)", info['ramp_rate'])
     logger.info("On level: %s", info['on_level'])
-    logger.info("LED level: %s", info['led_level'])
+    logger.info("LED level: %d / 100", info['led_level'])
     logger.info("X10 house code: %s", info['x10_house_code'])
     logger.info("X10 unit code: %s", info['x10_unit_code'])
 
