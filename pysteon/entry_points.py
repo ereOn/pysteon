@@ -481,7 +481,7 @@ def link(ctx, group, mode, timeout, alias, description):
 @click.option(
     '-l',
     '--level',
-    default=1.0,
+    default=100.0,
     type=float,
     help="The light level to set, as a floating-point number.",
 )
@@ -501,7 +501,8 @@ def light_on(ctx, device, level, instant):
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
-    loop.run_until_complete(plm.light_on(device.identity, level, instant))
+    level = loop.run_until_complete(plm.light_on(device.identity, level, instant))
+    logger.info("%s light level set to: %s%%", device, level)
 
 
 @plm.command(
@@ -524,7 +525,8 @@ def light_off(ctx, device, instant):
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
-    loop.run_until_complete(plm.light_off(device.identity, instant))
+    level = loop.run_until_complete(plm.light_off(device.identity, instant))
+    logger.info("%s light level set to: %s%%", device, level)
 
 
 @plm.command(
@@ -613,7 +615,9 @@ def remote_set(ctx, device):
 
 @plm.command(
     'get-device-info',
-    help="Get a device parameters.",
+    help="Get a device parameters.\n\nValid parameters are: %s" % ', '.join(
+        str(device_info) for device_info in DeviceInfo
+    ),
 )
 @click.argument(
     'device',
@@ -635,7 +639,9 @@ def get_device_info(ctx, device):
 
 @plm.command(
     'set-device-info',
-    help="Set a device parameter.",
+    help="Set a device parameter.\n\nValid parameters are: %s" % ', '.join(
+        str(device_info) for device_info in DeviceInfo
+    ),
 )
 @click.argument(
     'device',
@@ -654,14 +660,15 @@ def set_device_info(ctx, device, device_info, value):
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
 
-    loop.run_until_complete(
+    value = loop.run_until_complete(
         plm.set_device_info(device.identity, device_info, value),
     )
+    logger.info("%s set to: %s", device_info, value)
 
 
 @pysteon.command(
-    'update',
-    help="Update a device database entry",
+    'db',
+    help="Manipulate the device database entry",
 )
 @click.argument(
     'device',

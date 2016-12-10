@@ -42,6 +42,8 @@ from .objects import (
 from .units import (
     led_brightness_from_percent,
     led_brightness_to_percent,
+    on_level_from_percent,
+    on_level_to_percent,
     ramp_rate_from_seconds,
     ramp_rate_to_seconds,
 )
@@ -444,7 +446,7 @@ class PowerLineModem(object):
                         'firmware_version': firmware_version,
                     }
 
-    async def light_on(self, identity, level=1.0, instant=False):
+    async def light_on(self, identity, level=100.0, instant=False):
         """
         Send a light ON request to the specified device.
 
@@ -452,7 +454,10 @@ class PowerLineModem(object):
         :param level: The level to turn the light on to.
         :param instant: A flag that if set, cause the light level to change
             instantly.
+        :returns: The effective level.
         """
+        byte_value = on_level_from_percent(level)
+
         await self.send_standard_or_extended_message(
             message=InsteonMessage(
                 sender=self.identity,
@@ -462,11 +467,13 @@ class PowerLineModem(object):
                 flags=set(),
                 command_bytes=bytes([
                     0x12 if instant else 0x11,
-                    self._level_to_byte(level),
+                    byte_value,
                 ]),
                 user_data=b'',
             )
         )
+
+        return on_level_to_percent(byte_value)
 
     async def light_off(self, identity, instant=False):
         """
@@ -491,6 +498,8 @@ class PowerLineModem(object):
                 user_data=b'',
             )
         )
+
+        return 0
 
     async def remote_enter_linking(self, identity, group=0x01):
         """
@@ -611,7 +620,7 @@ class PowerLineModem(object):
                 'x10_house_code': response.user_data[4],
                 'x10_unit_code': response.user_data[5],
                 'ramp_rate': ramp_rate_to_seconds(response.user_data[6]),
-                'on_level': self._byte_to_level(response.user_data[7]),
+                'on_level': on_level_to_percent(response.user_data[7]),
                 'led_level': led_brightness_to_percent(
                     response.user_data[8],
                 ),
@@ -624,15 +633,28 @@ class PowerLineModem(object):
         :param identity: The device identity.
         :param device_info: The device information to set.
         :param value: The value.
+        :return: The used value.
         """
         command_bytes = bytes([0x2e, 0x00])
 
         if device_info == DeviceInfo.ramp_rate:
             device_info_byte_index = 2
             device_info_byte_value = ramp_rate_from_seconds(value)
+            value = ramp_rate_to_seconds(device_info_byte_value)
         elif device_info == DeviceInfo.led_brightness:
             device_info_byte_index = 2
             device_info_byte_value = led_brightness_from_percent(value)
+            value = led_brightness_to_percent(device_info_byte_value)
+        elif device_info == DeviceInfo.on_level:
+            device_info_byte_index = 2
+            device_info_byte_value = on_level_from_percent(value)
+            value = on_level_to_percent(device_info_byte_value)
+        elif device_subcategory == DeviceInfo.x10_address:
+            return 0
+        else:
+            raise RuntimeError(
+                "Command %s is not supported for this device." % device_info,
+            )
 
         user_data = bytes(chain(
             [0, device_info.value],
@@ -660,18 +682,10 @@ class PowerLineModem(object):
             response = await queue.get()
             assert InsteonMessageFlag.ack in response.flags
 
+        return value
+
 
     # Private methods below.
-
-    @staticmethod
-    def _level_to_byte(level, min_value=0x00, max_value=0xff):
-        assert min_value < max_value
-        return min(max_value, max(min_value, round(level * 256)))
-
-    @staticmethod
-    def _byte_to_level(byte, min_value=0x00, max_value=0xff):
-        assert min_value < max_value
-        return (byte - min_value) / max_value
 
     @staticmethod
     def _checksum(command_bytes, user_data):

@@ -533,10 +533,12 @@ class DeviceInfo(IntEnum):
 
     @classmethod
     def from_string(cls, value):
+        value = value.replace('-', '_')
+
         try:
             return getattr(cls, value)
         except AttributeError:
             raise ValueError(value)
 
     def __str__(self):
-        return self.name
+        return self.name.replace('_', '-')

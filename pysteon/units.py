@@ -84,3 +84,19 @@ def led_brightness_to_percent(value):
     """
     value = min(0x7f, max(0, value))
     return round((value / 0x7f) * 100)
+
+
+def on_level_from_percent(value):
+    """
+    Convert a percent from 0 to 100 to a brightness level.
+    """
+    value = min(100, max(0, value))
+    return round((value / 100.0) * 0xff)
+
+
+def on_level_to_percent(value):
+    """
+    Convert a percent from 0 to 100 to a brightness level.
+    """
+    value = min(0xff, max(0, value))
+    return round((value / 0xff) * 100)
