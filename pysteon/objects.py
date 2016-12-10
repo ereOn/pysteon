@@ -377,11 +377,13 @@ class SensorsAndActuatorsSubcategory(TitleIntEnum):
 
 class SecurityHealthSafetySubcatory(TitleIntEnum):
     motion_sensor = 0x01
+    open_close_sensor = 0x02
 
     @property
     def title(self):
         return {
             self.motion_sensor: "Motion Sensor [2842]",
+            self.open_close_sensor: "Open/Close Sensor [2843]",
         }[self]
 
 

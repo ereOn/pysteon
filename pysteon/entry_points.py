@@ -360,14 +360,32 @@ def monitor(ctx):
                             SecurityHealthSafetySubcatory.motion_sensor:
                         if msg.command_bytes[0] in [0x11]:
                             logger.info(
-                                "Motion sensor %s activated.",
+                                "Motion sensor %s activated (group %s).",
                                 device.name,
+                                int(msg.command_bytes[1]),
                             )
                             return
                         elif msg.command_bytes[0] in [0x13]:
                             logger.info(
-                                "Motion sensor %s deactivated.",
+                                "Motion sensor %s deactivated (group %s).",
                                 device.name,
+                                int(msg.command_bytes[1]),
+                            )
+                            return
+                    elif device.subcategory == \
+                            SecurityHealthSafetySubcatory.open_close_sensor:
+                        if msg.command_bytes[0] in [0x11]:
+                            logger.info(
+                                "Open/Close sensor %s is open (group %s).",
+                                device.name,
+                                int(msg.command_bytes[1]),
+                            )
+                            return
+                        elif msg.command_bytes[0] in [0x13]:
+                            logger.info(
+                                "Open/Close sensor %s is closed (group %s).",
+                                device.name,
+                                int(msg.command_bytes[1]),
                             )
                             return
                 elif device.category in [
@@ -376,14 +394,33 @@ def monitor(ctx):
                 ]:
                     if msg.command_bytes[0] in [0x11, 0x12]:
                         logger.info(
-                            "Light %s turned on.",
+                            "Light %s turned on (group %s).",
                             device.name,
+                            int(msg.command_bytes[1]),
                         )
                         return
-                    elif msg.command_bytes[0] in [0x13]:
+                    elif msg.command_bytes[0] in [0x13, 0x14]:
                         logger.info(
-                            "Light %s turned off.",
+                            "Light %s turned off (group %s).",
                             device.name,
+                            int(msg.command_bytes[1]),
+                        )
+                        return
+                elif device.category in [
+                    DeviceCategory.generalized_controllers,
+                ]:
+                    if msg.command_bytes[0] in [0x11, 0x12]:
+                        logger.info(
+                            "Remote %s press on (group %s).",
+                            device.name,
+                            int(msg.command_bytes[1]),
+                        )
+                        return
+                    elif msg.command_bytes[0] in [0x13, 0x14]:
+                        logger.info(
+                            "Remote %s press off (group %s).",
+                            device.name,
+                            int(msg.command_bytes[1]),
                         )
                         return
 
@@ -461,7 +498,7 @@ def link(ctx, group, mode, timeout, alias, description):
             important(mode),
         )
 
-        async def all_link(plm):
+        async def all_link(plm, alias, description):
             async with plm.all_linking_session(group=group, mode=mode):
                 logger.info(
                     "Waiting for a device to be all-linked for a maximum of %s"
@@ -498,8 +535,24 @@ def link(ctx, group, mode, timeout, alias, description):
                         important(mode),
                     )
 
+                identity = all_link_info['identity']
+                device = database.get_device(identity)
+
+                # Make sure to keep the existing information.
+                if device:
+                    logger.info(
+                        "Device %s is known already. Updating the entry.",
+                        device,
+                    )
+
+                    if alias is None:
+                        alias = device.alias
+
+                    if description is None:
+                        description = device.description
+
                 database.set_device(
-                    identity=all_link_info['identity'],
+                    identity=identity,
                     alias=alias,
                     description=description,
                     category=all_link_info['category'],
@@ -510,7 +563,7 @@ def link(ctx, group, mode, timeout, alias, description):
         loop.add_signal_handler(signal.SIGINT, plm.interrupt)
 
         try:
-            loop.run_until_complete(all_link(plm))
+            loop.run_until_complete(all_link(plm, alias, description))
         finally:
             loop.remove_signal_handler(signal.SIGINT)
 
