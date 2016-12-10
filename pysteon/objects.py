@@ -189,6 +189,7 @@ class DeviceCategory(TitleIntEnum):
             self.climate_control_heating: ClimateControlSubcategory,
             self.pool_and_spa_control: PoolAndSpaControlSubcategory,
             self.sensors_and_actuators: SensorsAndActuatorsSubcategory,
+            self.security_health_safety: SecurityHealthSafetySubcatory,
         }.get(self, GenericSubcategory)
 
 
@@ -371,6 +372,16 @@ class SensorsAndActuatorsSubcategory(TitleIntEnum):
     def title(self):
         return {
             self.iolinc: "IOLinc",
+        }[self]
+
+
+class SecurityHealthSafetySubcatory(TitleIntEnum):
+    motion_sensor = 0x01
+
+    @property
+    def title(self):
+        return {
+            self.motion_sensor: "Motion Sensor [2842]",
         }[self]
 
 
