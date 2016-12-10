@@ -9,6 +9,7 @@ import logging
 import os
 import signal
 
+from binascii import hexlify
 from chromalog.mark.helpers.simple import (
     error,
     important,
@@ -22,6 +23,8 @@ from .objects import (
     AllLinkMode,
     DeviceInfo,
     Identity,
+    DeviceCategory,
+    SecurityHealthSafetySubcatory,
 )
 from .log import logger
 
@@ -336,6 +339,7 @@ def monitor(ctx):
     debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
+    database = ctx.obj['database']
 
     try:
         logger.info(
@@ -345,8 +349,54 @@ def monitor(ctx):
 
         loop.add_signal_handler(signal.SIGINT, plm.interrupt)
 
+        def handle_event(msg):
+            device = database.get_device(msg.sender)
+
+            if not device:
+                logger.warning("Ignoring event (%s) for unknown device.", msg)
+            else:
+                if device.category == DeviceCategory.security_health_safety:
+                    if device.subcategory == \
+                            SecurityHealthSafetySubcatory.motion_sensor:
+                        if msg.command_bytes[0] in [0x11]:
+                            logger.info(
+                                "Motion sensor %s activated.",
+                                device.name,
+                            )
+                            return
+                        elif msg.command_bytes[0] in [0x13]:
+                            logger.info(
+                                "Motion sensor %s deactivated.",
+                                device.name,
+                            )
+                            return
+                elif device.category in [
+                    DeviceCategory.dimmable_lighting_control,
+                    DeviceCategory.switched_lighting_control,
+                ]:
+                    if msg.command_bytes[0] in [0x11, 0x12]:
+                        logger.info(
+                            "Light %s turned on.",
+                            device.name,
+                        )
+                        return
+                    elif msg.command_bytes[0] in [0x13]:
+                        logger.info(
+                            "Light %s turned off.",
+                            device.name,
+                        )
+                        return
+
+                logger.warning(
+                    "%s: unknown event %s",
+                    device,
+                    hexlify(msg.command_bytes),
+                )
+
         try:
-            loop.run_until_complete(plm.monitor())
+            loop.run_until_complete(
+                plm.monitor(on_event_callback=handle_event),
+            )
         finally:
             loop.remove_signal_handler(signal.SIGINT)
             logger.info(

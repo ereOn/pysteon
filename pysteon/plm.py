@@ -351,15 +351,19 @@ class PowerLineModem(object):
             self.__monitor_interrupt.set()
             logger.debug("Monitoring interrupted.")
 
-    async def monitor(self):
+    async def monitor(self, on_event_callback):
         self.__monitor_interrupt.clear()
 
-        self.on_message.connect(self._monitor_message)
+        callback = partial(
+            self._monitor_message,
+            on_event_callback=on_event_callback,
+        )
+        self.on_message.connect(callback)
 
         try:
             await self.__monitor_interrupt.wait()
         finally:
-            self.on_message.disconnect(self._monitor_message)
+            self.on_message.disconnect(callback)
 
     def wait_all_linking_completed(self):
         """
@@ -751,8 +755,15 @@ class PowerLineModem(object):
             insteon_message = InsteonMessage.from_message_body(message.body)
             self.on_insteon_message.emit(insteon_message)
 
-    def _monitor_message(self, message):
-        pass
+    def _monitor_message(self, message, on_event_callback):
+        if message.command_code in [
+            CommandCode.standard_message_received,
+            CommandCode.extended_message_received,
+        ]:
+            insteon_message = InsteonMessage.from_message_body(message.body)
+
+            if insteon_message.target == self.identity:
+                on_event_callback(insteon_message)
 
     def _handle_all_linking_completed(
         self,
