@@ -47,12 +47,16 @@ class DatabaseDevice(namedtuple('_DatabaseDevice', (
     def __str__(self):
         return '%s (%s)' % (
             self.name,
-            self.description if self.description else self.subcategory,
+            self.friendly_name,
         )
 
     @property
     def name(self):
         return self.alias if self.alias else self.identity
+
+    @property
+    def friendly_name(self):
+        return self.description if self.description else str(self.subcategory)
 
 
 class Database(object):

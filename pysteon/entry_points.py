@@ -360,17 +360,18 @@ def monitor(ctx, automate_module):
         if automate_module:
             automate.load_module(automate_module)
 
-        with automate:
-            try:
-                loop.run_until_complete(
-                    plm.monitor(on_event_callback=automate.handle_message),
-                )
-            finally:
-                loop.remove_signal_handler(signal.SIGINT)
-                logger.info(
-                    "No longer monitoring %s.",
-                    important(plm),
-                )
+        async def run():
+            async with automate:
+                await plm.monitor(on_event_callback=automate.handle_message)
+
+        try:
+            loop.run_until_complete(run())
+        finally:
+            loop.remove_signal_handler(signal.SIGINT)
+            logger.info(
+                "No longer monitoring %s.",
+                important(plm),
+            )
 
     except Exception as ex:
         if debug:

@@ -10,6 +10,10 @@ from chromalog.mark.helpers.simple import (
     important,
 )
 
+from ..objects import (
+    DeviceCategory,
+    SecurityHealthSafetySubcatory,
+)
 from ..log import logger
 
 
@@ -22,18 +26,20 @@ class Automate(object):
         self.plm = plm
         self.database = database
         self.loop = loop
+        self._registration_data = []
 
     def load_module(self, module):
         self.modules.append(importlib.import_module(module))
 
 
-    def __enter__(self):
+    async def __aenter__(self):
         for module in self.modules:
-            module.register(automate=self)
+            data = await module.register(automate=self)
+            self._registration_data.append(data)
 
-    def __exit__(self, *args):
-        for module in self.modules:
-            module.unregister(automate=self)
+    async def __aexit__(self, *args):
+        for module, data in zip(self.modules, self._registration_data):
+            await module.unregister(automate=self, data=data)
 
     @staticmethod
     def in_list(value, choices):
@@ -108,3 +114,69 @@ class Automate(object):
             return func
 
         return decorator
+
+    def fire_on_motion_sensor_activated(self):
+        return automate.fire_on_event(
+            device_categories=[DeviceCategory.security_health_safety],
+            device_subcategories=[SecurityHealthSafetySubcatory.motion_sensor],
+            commands=[0x11, 0x12],
+        )
+
+    def fire_on_motion_sensor_deactivated(self):
+        return automate.fire_on_event(
+            device_categories=[DeviceCategory.security_health_safety],
+            device_subcategories=[SecurityHealthSafetySubcatory.motion_sensor],
+            commands=[0x13, 0x14],
+        )
+
+    def fire_on_open_close_sensor_opened(self):
+        return automate.fire_on_event(
+            device_categories=[DeviceCategory.security_health_safety],
+            device_subcategories=[
+                SecurityHealthSafetySubcatory.open_close_sensor,
+            ],
+            commands=[0x11, 0x12],
+        )
+
+    def fire_on_open_close_sensor_closed(self):
+        return automate.fire_on_event(
+            device_categories=[DeviceCategory.security_health_safety],
+            device_subcategories=[
+                SecurityHealthSafetySubcatory.open_close_sensor,
+            ],
+            commands=[0x13, 0x14],
+        )
+
+    def fire_on_light_turned_on(self):
+        return automate.fire_on_event(
+            device_categories=[
+                DeviceCategory.dimmable_lighting_control,
+                DeviceCategory.switched_lighting_control,
+            ],
+            commands=[0x11, 0x12],
+        )
+
+    def fire_on_light_turned_off(self):
+        return automate.fire_on_event(
+            device_categories=[
+                DeviceCategory.dimmable_lighting_control,
+                DeviceCategory.switched_lighting_control,
+            ],
+            commands=[0x13, 0x14],
+        )
+
+    def fire_on_remote_pressed_on(self, groups=None):
+        return self.fire_on_event(
+            device_categories=[
+                DeviceCategory.generalized_controllers,
+            ],
+            commands=[0x11, 0x12],
+        )
+
+    def fire_on_remote_pressed_off(self, groups=None):
+        return self.fire_on_event(
+            device_categories=[
+                DeviceCategory.generalized_controllers,
+            ],
+            commands=[0x13, 0x14],
+        )
