@@ -17,14 +17,13 @@ from chromalog.mark.helpers.simple import (
 )
 from itertools import chain
 
+from .automation import Automate
 from .database import Database
 from .plm import PowerLineModem
 from .objects import (
     AllLinkMode,
     DeviceInfo,
     Identity,
-    DeviceCategory,
-    SecurityHealthSafetySubcatory,
 )
 from .log import logger
 
@@ -334,8 +333,14 @@ def info(ctx, fetch):
 
 
 @plm.command(help="Monitor the PLM for Insteon events.")
+@click.option(
+    '-m',
+    '--automate-module',
+    default=None,
+    help="A python module path to load for automation.",
+)
 @click.pass_context
-def monitor(ctx):
+def monitor(ctx, automate_module):
     debug = ctx.obj['debug']
     loop = ctx.obj['loop']
     plm = ctx.obj['plm']
@@ -348,98 +353,24 @@ def monitor(ctx):
         )
 
         loop.add_signal_handler(signal.SIGINT, plm.interrupt)
+        automate = Automate(plm=plm, database=database)
 
-        def handle_event(msg):
-            device = database.get_device(msg.sender)
+        automate.load_module('pysteon.automation.default')
 
-            if not device:
-                logger.warning("Ignoring event (%s) for unknown device.", msg)
-            else:
-                if device.category == DeviceCategory.security_health_safety:
-                    if device.subcategory == \
-                            SecurityHealthSafetySubcatory.motion_sensor:
-                        if msg.command_bytes[0] in [0x11]:
-                            logger.info(
-                                "Motion sensor %s activated (group %s).",
-                                device.name,
-                                int(msg.command_bytes[1]),
-                            )
-                            return
-                        elif msg.command_bytes[0] in [0x13]:
-                            logger.info(
-                                "Motion sensor %s deactivated (group %s).",
-                                device.name,
-                                int(msg.command_bytes[1]),
-                            )
-                            return
-                    elif device.subcategory == \
-                            SecurityHealthSafetySubcatory.open_close_sensor:
-                        if msg.command_bytes[0] in [0x11]:
-                            logger.info(
-                                "Open/Close sensor %s is open (group %s).",
-                                device.name,
-                                int(msg.command_bytes[1]),
-                            )
-                            return
-                        elif msg.command_bytes[0] in [0x13]:
-                            logger.info(
-                                "Open/Close sensor %s is closed (group %s).",
-                                device.name,
-                                int(msg.command_bytes[1]),
-                            )
-                            return
-                elif device.category in [
-                    DeviceCategory.dimmable_lighting_control,
-                    DeviceCategory.switched_lighting_control,
-                ]:
-                    if msg.command_bytes[0] in [0x11, 0x12]:
-                        logger.info(
-                            "Light %s turned on (group %s).",
-                            device.name,
-                            int(msg.command_bytes[1]),
-                        )
-                        return
-                    elif msg.command_bytes[0] in [0x13, 0x14]:
-                        logger.info(
-                            "Light %s turned off (group %s).",
-                            device.name,
-                            int(msg.command_bytes[1]),
-                        )
-                        return
-                elif device.category in [
-                    DeviceCategory.generalized_controllers,
-                ]:
-                    if msg.command_bytes[0] in [0x11, 0x12]:
-                        logger.info(
-                            "Remote %s press on (group %s).",
-                            device.name,
-                            int(msg.command_bytes[1]),
-                        )
-                        return
-                    elif msg.command_bytes[0] in [0x13, 0x14]:
-                        logger.info(
-                            "Remote %s press off (group %s).",
-                            device.name,
-                            int(msg.command_bytes[1]),
-                        )
-                        return
+        if automate_module:
+            automate.load_module(automate_module)
 
-                logger.warning(
-                    "%s: unknown event %s",
-                    device,
-                    hexlify(msg.command_bytes),
+        with automate:
+            try:
+                loop.run_until_complete(
+                    plm.monitor(on_event_callback=automate.handle_message),
                 )
-
-        try:
-            loop.run_until_complete(
-                plm.monitor(on_event_callback=handle_event),
-            )
-        finally:
-            loop.remove_signal_handler(signal.SIGINT)
-            logger.info(
-                "No longer monitoring %s.",
-                important(plm),
-            )
+            finally:
+                loop.remove_signal_handler(signal.SIGINT)
+                logger.info(
+                    "No longer monitoring %s.",
+                    important(plm),
+                )
 
     except Exception as ex:
         if debug:
