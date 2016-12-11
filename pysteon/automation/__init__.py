@@ -116,21 +116,21 @@ class Automate(object):
         return decorator
 
     def fire_on_motion_sensor_activated(self):
-        return automate.fire_on_event(
+        return self.fire_on_event(
             device_categories=[DeviceCategory.security_health_safety],
             device_subcategories=[SecurityHealthSafetySubcatory.motion_sensor],
             commands=[0x11, 0x12],
         )
 
     def fire_on_motion_sensor_deactivated(self):
-        return automate.fire_on_event(
+        return self.fire_on_event(
             device_categories=[DeviceCategory.security_health_safety],
             device_subcategories=[SecurityHealthSafetySubcatory.motion_sensor],
             commands=[0x13, 0x14],
         )
 
     def fire_on_open_close_sensor_opened(self):
-        return automate.fire_on_event(
+        return self.fire_on_event(
             device_categories=[DeviceCategory.security_health_safety],
             device_subcategories=[
                 SecurityHealthSafetySubcatory.open_close_sensor,
@@ -139,7 +139,7 @@ class Automate(object):
         )
 
     def fire_on_open_close_sensor_closed(self):
-        return automate.fire_on_event(
+        return self.fire_on_event(
             device_categories=[DeviceCategory.security_health_safety],
             device_subcategories=[
                 SecurityHealthSafetySubcatory.open_close_sensor,
@@ -148,7 +148,7 @@ class Automate(object):
         )
 
     def fire_on_light_turned_on(self):
-        return automate.fire_on_event(
+        return self.fire_on_event(
             device_categories=[
                 DeviceCategory.dimmable_lighting_control,
                 DeviceCategory.switched_lighting_control,
@@ -157,7 +157,7 @@ class Automate(object):
         )
 
     def fire_on_light_turned_off(self):
-        return automate.fire_on_event(
+        return self.fire_on_event(
             device_categories=[
                 DeviceCategory.dimmable_lighting_control,
                 DeviceCategory.switched_lighting_control,
