@@ -763,7 +763,7 @@ class PowerLineModem(object):
             insteon_message = InsteonMessage.from_message_body(message.body)
 
             if insteon_message.target == self.identity:
-                on_event_callback(insteon_message)
+                asyncio.ensure_future(on_event_callback(insteon_message))
 
     def _handle_all_linking_completed(
         self,

@@ -14,13 +14,14 @@ from ..log import logger
 
 
 class Automate(object):
-    def __init__(self, plm, database):
+    def __init__(self, plm, database, loop):
         self.state = 'initial'
         self.modules = []
         self.on_state_changed_callbacks = []
         self.on_event_callbacks = []
         self.plm = plm
         self.database = database
+        self.loop = loop
 
     def load_module(self, module):
         self.modules.append(importlib.import_module(module))
@@ -38,7 +39,7 @@ class Automate(object):
     def in_list(value, choices):
         return not choices or value in choices
 
-    def transition(self, new_state):
+    async def transition(self, new_state):
         if new_state != self.state:
             old_state, self.state = self.state, new_state
 
@@ -48,9 +49,9 @@ class Automate(object):
 
                 if self.in_list(old_state, attrs['from_states']):
                     if self.in_list(new_state, attrs['to_states']):
-                        callback(old_state=old_state, new_state=new_state)
+                        await callback(old_state=old_state, new_state=new_state)
 
-    def handle_message(self, msg):
+    async def handle_message(self, msg):
         device = self.database.get_device(msg.sender)
 
         if not device:
@@ -66,7 +67,7 @@ class Automate(object):
                 self.in_list(msg.command_bytes[0], attrs['commands']),
                 self.in_list(msg.command_bytes[1], attrs['groups']),
             ]):
-                callback(
+                await callback(
                     device=device,
                     command=msg.command_bytes[0],
                     group=msg.command_bytes[1],

@@ -353,7 +353,7 @@ def monitor(ctx, automate_module):
         )
 
         loop.add_signal_handler(signal.SIGINT, plm.interrupt)
-        automate = Automate(plm=plm, database=database)
+        automate = Automate(plm=plm, database=database, loop=loop)
 
         automate.load_module('pysteon.automation.default')
 
