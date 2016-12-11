@@ -47,7 +47,7 @@ class DatabaseDevice(namedtuple('_DatabaseDevice', (
     def __str__(self):
         return '%s (%s)' % (
             self.name,
-            self.friendly_name,
+            self.description if self.description else str(self.subcategory),
         )
 
     @property
@@ -56,7 +56,7 @@ class DatabaseDevice(namedtuple('_DatabaseDevice', (
 
     @property
     def friendly_name(self):
-        return self.description if self.description else str(self.subcategory)
+        return self.description if self.description else self.name
 
 
 class Database(object):
